@@ -1,0 +1,20 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+
+# Logs
+*.log
+
+# Others
+*.db
+*.sqlite
+*.DS_Store
+
+# Opcional: configs locales
+appsettings.Development.json
+appsettings.Local.json
