@@ -34,7 +34,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                 Password.Property(p => p.Hash)
                    .HasColumnName("password_hash")
                    .HasMaxLength(128)
-                   .IsRequired(false);
+                   .IsRequired();
             });
 
             // SETEAR LA NAVEGACION A PASSWORD COMO NULL SI ROMPE. OWNSONE.

@@ -21,7 +21,7 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
         {
             return dbContext.Services
                 .AsSplitQuery()
-                .Include(s => s.ServiceSchedulesUnavailability)
+                .Include(s => s.ServicesUnavailability)
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
@@ -33,11 +33,13 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
 
             return dbContext.Services
                 .Where(s => s.Id == id)
-                .SelectMany(s => s.ServiceSchedulesUnavailability)
+                .SelectMany(s => s.ServicesUnavailability)
                 .AnyAsync(u =>
-                    u.Date == date && (
-                        u.Range == null ||
-                        (u.Range.Start < endTime && u.Range.End > startTime)
+                    u.DateRange.Start <= date && 
+                    u.DateRange.End >= date &&
+                    (
+                        u.TimeRange == null || 
+                        (u.TimeRange.Start < endTime && u.TimeRange.End > startTime)
                     ), ct);
         }
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default)
@@ -45,7 +47,7 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
             return dbContext.Services
                 .AsSplitQuery()
                 .Include(s => s.ServiceSchedules)
-                .Include(s => s.ServiceSchedulesUnavailability)
+                .Include(s => s.ServicesUnavailability)
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
@@ -66,6 +68,14 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 where s.OwnerId == ownerId
                 select ss.SecretaryId
             ).Distinct().CountAsync(ct);
+        }
+
+        public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .Where(s => s.OwnerId == ownerId)
+                .AsNoTracking()
+                .ToListAsync(ct);
         }
     }
 }

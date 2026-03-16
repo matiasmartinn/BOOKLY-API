@@ -10,9 +10,16 @@ namespace BOOKLY.Infrastructure.Repositories
     {
         public UserRepository(BooklyDbContext context) : base(context) { }
 
-        public Task<bool> ExistsByEmail(Email email, CancellationToken ct = default)
+        public Task<bool> ExistsByEmail(string email, CancellationToken ct = default)
         {
-            return Set.AnyAsync(user => user.Email.Value == email.Value, ct);
+            return Set.AnyAsync(user => user.Email.Value == email, ct);
+        }
+
+        public async Task<User?> GetByEmail(string email, CancellationToken ct = default)
+        {
+            return await dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email.Value == email, ct);
         }
     }
 }

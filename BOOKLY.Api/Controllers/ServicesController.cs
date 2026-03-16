@@ -18,7 +18,7 @@ namespace BOOKLY.Api.Controllers
 
         #region Basic Crud
         /// <summary>
-        /// Recupera un servicio junto con su configuración actual desde la capa de aplicación.
+        /// Recupera un servicio junto con su configuración inicial, horarios e inhabilitaciones.
         /// </summary>
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
@@ -28,6 +28,15 @@ namespace BOOKLY.Api.Controllers
         {
             return HandleResult(await _serviceApplicationService.GetServiceById(id, ct));
         }
+
+        [HttpGet]
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetServicesByOwner([FromQuery] int ownerId, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.GetServicesByOwner(ownerId, ct));
+        }
+
         /// <summary>
         /// Crea un nuevo servicio aplicando validaciones de dominio y persistiendo el agregado.
         /// </summary>
@@ -41,6 +50,7 @@ namespace BOOKLY.Api.Controllers
                 ? CreatedAtAction(nameof(GetById), new { id = result.Data?.Id }, result.Data)
                 : HandleResult(result);
         }
+
         /// <summary>
         /// Actualiza los datos principales de un servicio existente aplicando reglas de negocio.
         /// </summary>
@@ -52,6 +62,7 @@ namespace BOOKLY.Api.Controllers
         {
             return HandleResult(await _serviceApplicationService.UpdateService(id, dto, ct));
         }
+
         /// <summary>
         /// Elimina lógicamente un servicio del sistema.
         /// </summary>
@@ -82,7 +93,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Calcula y devuelve los turnos disponibles para un servicio en una fecha determinada.
         /// </summary>
-        [HttpGet("service/{serviceId}/available-slots/{date}")]
+        [HttpGet("{serviceId}/available-slots/{date}")]
         [ProducesResponseType(typeof(List<DateTime>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetAvailableSlots(int serviceId, DateOnly date, CancellationToken ct)

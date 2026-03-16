@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.AppointmentAggregate
 {
-    public class AppointmentService : BaseService<AppointmentService>, IAppointmentService
+    public class AppointmentService : IAppointmentService
     {
         private readonly IAppointmentRepository _repository;
         private readonly IServiceRepository _serviceRepository;
@@ -21,7 +21,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             , IServiceRepository serviceRepository
             , IMapper mapper
             , IUnitOfWork unitOfWork
-            , ILogger<AppointmentService> logger) : base(logger)
+            )
         {
             _repository = repository;
             _serviceRepository = serviceRepository;
@@ -66,8 +66,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (hasOverlap)
                 return Result<AppointmentDto>.Failure(Error.Conflict("El horario seleccionado ya no está disponible."));
 
-            return await Execute(async () =>
-            {
                 var email = Email.Create(dto.ClientEmail);
                 var client = ClientInfo.Create(dto.ClientName, dto.ClientPhone, email);
 
@@ -85,8 +83,8 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
                 await _repository.AddOne(appointment, ct);
                 await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<AppointmentDto>(appointment);
-            });
+                return Result<AppointmentDto>.Success(_mapper.Map<AppointmentDto>(appointment));
+
         }
 
         // ========== ESTADO ==========
@@ -97,12 +95,10 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            return await Execute(async () =>
-            {
-                appointment.Cancel(dto.Reason);
-                _repository.Update(appointment);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            appointment.Cancel(dto.Reason);
+            _repository.Update(appointment);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result> Confirm(int id, CancellationToken ct = default)
@@ -111,12 +107,10 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            return await Execute(async () =>
-            {
-                appointment.Confirm();
-                _repository.Update(appointment);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            appointment.Confirm();
+            _repository.Update(appointment);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result> MarkAsCompleted(int id, CancellationToken ct = default)
@@ -125,12 +119,10 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            return await Execute(async () =>
-            {
-                appointment.MarkAsCompleted();
-                _repository.Update(appointment);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            appointment.MarkAsCompleted();
+            _repository.Update(appointment);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result> MarkAsNoShow(int id, CancellationToken ct = default)
@@ -139,12 +131,10 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            return await Execute(async () =>
-            {
-                appointment.MarkAsNoShow();
-                _repository.Update(appointment);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            appointment.MarkAsNoShow();
+            _repository.Update(appointment);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
     }
 }

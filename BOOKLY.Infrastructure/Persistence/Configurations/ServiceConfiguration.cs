@@ -1,7 +1,5 @@
 ﻿using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
-using BOOKLY.Domain.Aggregates.UserAggregate;
-using BOOKLY.Domain.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -27,9 +25,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("owner_id")
                    .IsRequired();
 
-            builder.HasIndex(x => x.OwnerId)
-                    .HasDatabaseName("ix_services_owner_id");
-
             builder.Property(x => x.Description)
                    .HasColumnName("description")
                    .HasMaxLength(500);
@@ -46,16 +41,16 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("service_type_id")
                    .IsRequired();
 
-            builder.HasIndex(x => x.ServiceTypeId)
-                   .HasDatabaseName("ix_services_service_type_id");
-
             builder.Property(x => x.Mode)
                    .HasColumnName("mode")
                    .HasConversion<int>();
 
-            // =========================
-            // Slug (Value Object - Owned)
-            // =========================
+            builder.HasIndex(x => x.OwnerId)
+                   .HasDatabaseName("ix_services_owner_id");
+
+            builder.HasIndex(x => x.ServiceTypeId)
+                   .HasDatabaseName("ix_services_service_type_id");
+
             builder.OwnsOne(x => x.Slug, slug =>
             {
                 slug.Property(s => s.Value)
@@ -68,9 +63,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                     .IsUnique();
             });
 
-            // =========================
-            // Duration (Value Object - Owned)
-            // =========================
             builder.OwnsOne(x => x.DurationMinutes, duration =>
             {
                 duration.Property(d => d.Value)
@@ -78,9 +70,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                         .IsRequired();
             });
 
-            // =========================================================
-            // ServiceSchedules (Owned Collection) 
-            // =========================================================
             builder.Navigation(x => x.ServiceSchedules)
                    .HasField("_serviceSchedules")
                    .UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -100,11 +89,13 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                 {
                     range.Property(r => r.Start)
                          .HasColumnName("start_time")
-                         .HasColumnType("time");
+                         .HasColumnType("time")
+                         .IsRequired();
 
                     range.Property(r => r.End)
                          .HasColumnName("end_time")
-                         .HasColumnType("time");
+                         .HasColumnType("time")
+                         .IsRequired();
                 });
 
                 schedules.OwnsOne(s => s.Capacity, cap =>
@@ -125,39 +116,43 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                          .HasDatabaseName("ix_service_schedules_service_id");
             });
 
-            // =========================================================
-            // ServiceSchedulesUnavailability (Owned Collection) con backing field
-            // =========================================================
-            builder.Navigation(x => x.ServiceSchedulesUnavailability)
-                   .HasField("_serviceSchedulesUnavailability")
+            builder.Navigation(x => x.ServicesUnavailability)
+                   .HasField("_serviceUnavailability")
                    .UsePropertyAccessMode(PropertyAccessMode.Field);
 
-            builder.OwnsMany(x => x.ServiceSchedulesUnavailability, unavail =>
+            builder.OwnsMany(x => x.ServicesUnavailability, unavail =>
             {
-                unavail.ToTable("service_schedule_unavailability");
+                unavail.ToTable("service_unavailabilities");
                 unavail.WithOwner().HasForeignKey("service_id");
 
                 unavail.HasKey(u => u.Id);
 
                 unavail.Property(u => u.Id)
-                       .HasColumnName("service_schedule_unavailability_id")
+                       .HasColumnName("service_unavailability_id")
                        .ValueGeneratedOnAdd();
 
-                unavail.Property(u => u.Date)
-                       .HasColumnName("date")
-                       .HasColumnType("date")
-                       .IsRequired();
-
-                // Range puede ser null (día completo)
-                unavail.OwnsOne(u => u.Range, range =>
+                unavail.OwnsOne(u => u.DateRange, dateRange =>
                 {
-                    range.Property(r => r.Start)
-                         .HasColumnName("start_time")
-                         .HasColumnType("time");
+                    dateRange.Property(d => d.Start)
+                             .HasColumnName("start_date")
+                             .HasColumnType("date")
+                             .IsRequired();
 
-                    range.Property(r => r.End)
-                         .HasColumnName("end_time")
-                         .HasColumnType("time");
+                    dateRange.Property(d => d.End)
+                             .HasColumnName("end_date")
+                             .HasColumnType("date")
+                             .IsRequired();
+                });
+
+                unavail.OwnsOne(u => u.TimeRange, timeRange =>
+                {
+                    timeRange.Property(t => t.Start)
+                             .HasColumnName("start_time")
+                             .HasColumnType("time");
+
+                    timeRange.Property(t => t.End)
+                             .HasColumnName("end_time")
+                             .HasColumnType("time");
                 });
 
                 unavail.Property(u => u.Reason)
@@ -165,33 +160,19 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                        .HasMaxLength(250);
 
                 unavail.HasIndex("service_id")
-                       .HasDatabaseName("ix_service_schedule_unavailability_service_id");
-
+                       .HasDatabaseName("ix_service_unavailabilities_service_id");
             });
 
-            // =========================================================
-            // ServiceSecretaries (Join Entity) - controlado por Service
-            // ========================================================
             builder.Navigation(s => s.ServiceSecretaries)
-                    .HasField("_serviceSecretaries")
-                    .UsePropertyAccessMode(PropertyAccessMode.Field);
+                   .HasField("_serviceSecretaries")
+                   .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             builder.HasMany(s => s.ServiceSecretaries)
                    .WithOne()
                    .HasForeignKey(ss => ss.ServiceId)
                    .OnDelete(DeleteBehavior.Cascade);
 
-            // Proyección: SecretaryIds no se persiste
             builder.Ignore(x => x.SecretaryIds);
-
-            // =========================
-            // Índices
-            // =========================
-            builder.HasIndex(x => x.OwnerId)
-                   .HasDatabaseName("ix_services_owner_id");
-
-            builder.HasIndex(x => x.ServiceTypeId)
-                   .HasDatabaseName("ix_services_service_type_id");
         }
     }
 }

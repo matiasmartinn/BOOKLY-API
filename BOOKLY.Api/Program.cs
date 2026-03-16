@@ -1,21 +1,33 @@
+using BOOKLY.Api.Middleware;
 using BOOKLY.Application.DependencyInjection;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((ctx, services, cfg) =>
+const string FrontendPolicy = "FrontendPolicy";
+
+builder.Services.AddCors(options =>
 {
-    cfg.MinimumLevel.Information()
-       .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
-       .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
-       .Enrich.FromLogContext()
-       .WriteTo.Console();
+    options.AddPolicy(FrontendPolicy, policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5173",   // Vite
+                "http://localhost:3000"   // React clásico
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
 });
+
+
 
 // Add services to the container
 builder.Services.AddControllers();
+
+// Register ProblemDetails
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -34,6 +46,8 @@ builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 
 var app = builder.Build();
 
+app.UseExceptionHandling();
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -42,6 +56,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors(FrontendPolicy);
+
 app.UseAuthorization();
 app.MapControllers();
 

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.ServiceTypeAggregate
 {
-    public sealed class ServiceTypeService : BaseService<ServiceTypeService>, IServiceTypeService
+    public sealed class ServiceTypeService : IServiceTypeService
     {
         private readonly IServiceTypeRepository _serviceTypeRepository;
         private readonly IMapper _mapper;
@@ -18,9 +18,8 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
         public ServiceTypeService(
             IServiceTypeRepository serviceTypeRepository,
             IMapper mapper,
-            IUnitOfWork unitOfWork,
-            ILogger<ServiceTypeService> logger
-             ) : base(logger)
+            IUnitOfWork unitOfWork
+            )
         {
             _serviceTypeRepository = serviceTypeRepository;
             _mapper = mapper;
@@ -54,34 +53,33 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
         public async Task<Result<ServiceTypeDto>> CreateServiceType(CreateServiceTypeDto dto, CancellationToken ct = default)
         {
-            var service = ServiceType.Create(
+            var serviceType = ServiceType.Create(
                 dto.Name,
                 dto.Description
             );
-            await _serviceTypeRepository.AddOne(service, ct);
+
+            await _serviceTypeRepository.AddOne(serviceType, ct);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(service));
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
-         public async Task<Result<ServiceTypeDto>> UpdateServiceType(int id, UpdateServiceTypeDto dto, CancellationToken ct = default)
+        public async Task<Result<ServiceTypeDto>> UpdateServiceType(int id, UpdateServiceTypeDto dto, CancellationToken ct = default)
         {
             var serviceType = await _serviceTypeRepository.GetOne(id, ct);
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                if (dto.Name != null)
-                    serviceType.ChangeName(dto.Name);
+            if (dto.Name != null)
+                serviceType.ChangeName(dto.Name);
 
-                if (dto.Description != null)
-                    serviceType.ChangeDescription(dto.Description);
+            if (dto.Description != null)
+                serviceType.ChangeDescription(dto.Description);
 
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceTypeDto>(serviceType);
-            });
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
         public async Task<Result> DeleteServiceType(int id, CancellationToken ct = default)
@@ -90,12 +88,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.Deactivate();
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.Deactivate();
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         // ========================
@@ -108,20 +105,18 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.AddField(
-                    dto.Key,
-                    dto.Label,
-                    (ServiceFieldType)dto.FieldType,
-                    dto.IsRequired,
-                    dto.SortOrder,
-                    dto.Description);
+            serviceType.AddField(
+                dto.Key,
+                dto.Label,
+                (ServiceFieldType)dto.FieldType,
+                dto.IsRequired,
+                dto.SortOrder,
+                dto.Description);
 
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceTypeDto>(serviceType);
-            });
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
         public async Task<Result<ServiceTypeDto>> UpdateField(int serviceTypeId, int fieldId, UpdateServiceTypeFieldDto dto, CancellationToken ct = default)
@@ -130,23 +125,23 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
+            if (dto.Label != null || dto.Description != null || dto.IsRequired.HasValue || dto.SortOrder.HasValue)
             {
-                if (dto.Label != null || dto.Description != null || dto.IsRequired.HasValue || dto.SortOrder.HasValue)
-                    serviceType.UpdateField(
-                        fieldId,
-                        dto.Label,
-                        dto.Description,
-                        dto.IsRequired,
-                        dto.SortOrder);
+                serviceType.UpdateField(
+                    fieldId,
+                    dto.Label,
+                    dto.Description,
+                    dto.IsRequired,
+                    dto.SortOrder);
+            }
 
-                if (dto.FieldType.HasValue)
-                    serviceType.ChangeFieldType(fieldId, (ServiceFieldType)dto.FieldType.Value);
+            if (dto.FieldType.HasValue)
+                serviceType.ChangeFieldType(fieldId, (ServiceFieldType)dto.FieldType.Value);
 
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceTypeDto>(serviceType);
-            });
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
         public async Task<Result> RemoveField(int serviceTypeId, int fieldId, CancellationToken ct = default)
@@ -155,12 +150,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.RemoveField(fieldId);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.RemoveField(fieldId);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         public async Task<Result> ActivateField(int serviceTypeId, int fieldId, CancellationToken ct = default)
@@ -169,12 +163,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.ActivateField(fieldId);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.ActivateField(fieldId);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         // ========================
@@ -187,13 +180,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceTypeDto>(serviceType);
-            });
+            serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
         public async Task<Result<ServiceTypeDto>> UpdateOption(int serviceTypeId, int fieldId, int optionId, UpdateServiceTypeFieldOptionDto dto, CancellationToken ct = default)
@@ -202,13 +193,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceTypeDto>(serviceType);
-            });
+            serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServiceTypeDto>.Success(_mapper.Map<ServiceTypeDto>(serviceType));
         }
 
         public async Task<Result> RemoveOption(int serviceTypeId, int fieldId, int optionId, CancellationToken ct = default)
@@ -217,12 +206,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.RemoveOptionFromField(fieldId, optionId);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.RemoveOptionFromField(fieldId, optionId);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         public async Task<Result> DeactivateOption(int serviceTypeId, int fieldId, int optionId, CancellationToken ct = default)
@@ -231,12 +219,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.DeactivateOption(fieldId, optionId);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.DeactivateOption(fieldId, optionId);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         public async Task<Result> ActivateOption(int serviceTypeId, int fieldId, int optionId, CancellationToken ct = default)
@@ -245,12 +232,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            return await Execute(async () =>
-            {
-                serviceType.ActivateOption(fieldId, optionId);
-                _serviceTypeRepository.Update(serviceType);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            serviceType.ActivateOption(fieldId, optionId);
+            _serviceTypeRepository.Update(serviceType);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
     }
 }

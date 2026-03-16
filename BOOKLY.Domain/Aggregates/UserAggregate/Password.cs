@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.UserAggregate
+﻿using BOOKLY.Domain.Interfaces;
+
+namespace BOOKLY.Domain.Aggregates.UserAggregate
 {
     public record Password
     {
@@ -20,27 +22,6 @@
             return new Password(hash);
         }
 
-        /// <summary>
-        /// Validar que cumpla el formato de contraseña.
-        /// </summary>
-        /// <param name="plainText"></param>
-        /// <exception cref="DomainException"></exception>
-        public static void AssertPlainTextIsValid(string plainText)
-        {
-            if (string.IsNullOrWhiteSpace(plainText))
-                throw new DomainException("La contraseña es requerida");
-
-            if(plainText.Length < 8)
-                throw new DomainException("La contraseña debe tener al menos 8 caracteres.");
-
-            if(plainText.Length > 128)
-                throw new DomainException("La contraseña no puede exceder los 128 caracteres.");
-
-            if(!plainText.Any(char.IsDigit))
-                throw new DomainException("La contraseña debe contener al menos un número.");
-
-            if(!plainText.Any(char.IsUpper))
-                throw new DomainException("La contraseña debe contener al menos una mayúscula.");
-        }
+        public bool Verify(string plaintText, IPasswordHasher hasher) => hasher.Verify(plaintText, Hash);
     }
 }

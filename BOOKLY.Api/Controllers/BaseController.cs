@@ -30,12 +30,35 @@ namespace BOOKLY.Api.Controllers
 
         private IActionResult MapError(Error error) => error.Type switch
         {
-            ErrorType.NotFound => NotFound(new { error = error.Message }),
-            ErrorType.Validation => BadRequest(new { error = error.Message }),
-            ErrorType.Conflict => Conflict(new { error = error.Message }),
-            ErrorType.Unauthorized => Unauthorized(new { error = error.Message }),
-            ErrorType.Forbidden => base.StatusCode(StatusCodes.Status403Forbidden, new { error = error.Message }),
-            _ => base.StatusCode(StatusCodes.Status500InternalServerError, new { error = error.Message }),
+            ErrorType.NotFound => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Recurso no encontrado"),
+
+            ErrorType.Validation => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Error de validación"),
+
+            ErrorType.Conflict => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Conflicto"),
+
+            ErrorType.Unauthorized => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "No autorizado"),
+
+            ErrorType.Forbidden => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Acceso denegado"),
+
+            _ => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Error inesperado"),
         };
     }
 }

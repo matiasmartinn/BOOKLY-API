@@ -1,14 +1,15 @@
 ﻿using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 
 namespace BOOKLY.Domain.DomainServices
 {
     public interface IAvailabilityService
     {
         IReadOnlyCollection<DateTime> GetAvailableSlots(
-        Service service,
-        IReadOnlyCollection<Appointment> appointments,
-        DateOnly date);
+            Service service,
+            IReadOnlyCollection<Appointment> appointments,
+            DateOnly date);
     }
     public class AvailabilityService : IAvailabilityService
     {
@@ -17,14 +18,12 @@ namespace BOOKLY.Domain.DomainServices
             IReadOnlyCollection<Appointment> appointments,
             DateOnly date)
         {
-            // 1. Día completamente bloqueado
-            var isFullDayBlocked = service.ServiceSchedulesUnavailability
-                .Any(u => u.Date == date && u.Range == null);
-
+            // 1. Día completamente bloqueado por una inhabilitación
+            var isFullDayBlocked = service.IsFullDayBlocked(date);
             if (isFullDayBlocked)
                 return [];
 
-            // 2. Schedules del día de la semana
+            // 2. Horarios configurados para el día de semana
             var schedulesForDay = service.ServiceSchedules
                 .Where(s => s.Day.Value == (int)date.DayOfWeek)
                 .OrderBy(s => s.Range.Start)
@@ -33,33 +32,35 @@ namespace BOOKLY.Domain.DomainServices
             if (schedulesForDay.Count == 0)
                 return [];
 
-            // 3. Rangos parcialmente bloqueados del día
-            var blockedRanges = service.ServiceSchedulesUnavailability
-                .Where(u => u.Date == date && u.Range != null)
-                .Select(u => u.Range!)
-                .ToList();
+            // 3. Rangos parciales bloqueados que aplican a la fecha
+            var blockedRanges = service.GetBlockedRanges(date);
 
             var slotDuration = TimeSpan.FromMinutes(service.DurationMinutes.Value);
             var result = new List<DateTime>();
+            var now = DateTime.Now;
 
             foreach (var schedule in schedulesForDay)
             {
                 var windowStart = date.ToDateTime(schedule.Range.Start);
                 var windowEnd = date.ToDateTime(schedule.Range.End);
-                var dateTimeNow = DateTime.Now;
 
-                for (var slotStart = windowStart; slotStart + slotDuration <= windowEnd; slotStart += slotDuration)
+                for (
+                    var slotStart = windowStart;
+                    slotStart + slotDuration <= windowEnd;
+                    slotStart += slotDuration)
                 {
                     var slotEnd = slotStart + slotDuration;
 
-                    var isBlocked = blockedRanges.Any(r =>
-                        slotStart < date.ToDateTime(r.End) &&
-                        slotEnd > date.ToDateTime(r.Start));
+                    var slotRange = TimeRange.Create(
+                        TimeOnly.FromDateTime(slotStart),
+                        TimeOnly.FromDateTime(slotEnd));
+
+                    var isBlocked = blockedRanges.Any(r => r.OverlapsWith(slotRange));
 
                     if (isBlocked)
                         continue;
 
-                    if (dateTimeNow > slotStart)
+                    if (now > slotStart)
                         continue;
 
                     var hasOverlap = appointments.Any(a =>

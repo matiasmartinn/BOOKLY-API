@@ -4,6 +4,7 @@ using BOOKLY.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BOOKLY.Infrastructure.Migrations
 {
     [DbContext(typeof(BooklyDbContext))]
-    partial class BooklyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260313140647_AddMuchasDatos")]
+    partial class AddMuchasDatos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -766,14 +769,18 @@ namespace BOOKLY.Infrastructure.Migrations
                                 .IsRequired();
                         });
 
-                    b.OwnsMany("BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceUnavailability", "ServicesUnavailability", b1 =>
+                    b.OwnsMany("BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceScheduleUnavailability", "ServiceSchedulesUnavailability", b1 =>
                         {
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("int")
-                                .HasColumnName("service_unavailability_id");
+                                .HasColumnName("service_schedule_unavailability_id");
 
                             SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+
+                            b1.Property<DateOnly>("Date")
+                                .HasColumnType("date")
+                                .HasColumnName("date");
 
                             b1.Property<string>("Reason")
                                 .HasMaxLength(250)
@@ -786,16 +793,16 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.HasKey("Id");
 
                             b1.HasIndex("service_id")
-                                .HasDatabaseName("ix_service_unavailabilities_service_id");
+                                .HasDatabaseName("ix_service_schedule_unavailability_service_id");
 
-                            b1.ToTable("service_unavailabilities", (string)null);
+                            b1.ToTable("service_schedule_unavailability", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("service_id");
 
-                            b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.TimeRange", "TimeRange", b2 =>
+                            b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.TimeRange", "Range", b2 =>
                                 {
-                                    b2.Property<int>("ServiceUnavailabilityId")
+                                    b2.Property<int>("ServiceScheduleUnavailabilityId")
                                         .HasColumnType("int");
 
                                     b2.Property<TimeOnly>("End")
@@ -806,39 +813,15 @@ namespace BOOKLY.Infrastructure.Migrations
                                         .HasColumnType("time")
                                         .HasColumnName("start_time");
 
-                                    b2.HasKey("ServiceUnavailabilityId");
+                                    b2.HasKey("ServiceScheduleUnavailabilityId");
 
-                                    b2.ToTable("service_unavailabilities");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ServiceUnavailabilityId");
-                                });
-
-                            b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.DateRange", "DateRange", b2 =>
-                                {
-                                    b2.Property<int>("ServiceUnavailabilityId")
-                                        .HasColumnType("int");
-
-                                    b2.Property<DateOnly>("End")
-                                        .HasColumnType("date")
-                                        .HasColumnName("end_date");
-
-                                    b2.Property<DateOnly>("Start")
-                                        .HasColumnType("date")
-                                        .HasColumnName("start_date");
-
-                                    b2.HasKey("ServiceUnavailabilityId");
-
-                                    b2.ToTable("service_unavailabilities");
+                                    b2.ToTable("service_schedule_unavailability");
 
                                     b2.WithOwner()
-                                        .HasForeignKey("ServiceUnavailabilityId");
+                                        .HasForeignKey("ServiceScheduleUnavailabilityId");
                                 });
 
-                            b1.Navigation("DateRange")
-                                .IsRequired();
-
-                            b1.Navigation("TimeRange");
+                            b1.Navigation("Range");
                         });
 
                     b.Navigation("DurationMinutes")
@@ -846,7 +829,7 @@ namespace BOOKLY.Infrastructure.Migrations
 
                     b.Navigation("ServiceSchedules");
 
-                    b.Navigation("ServicesUnavailability");
+                    b.Navigation("ServiceSchedulesUnavailability");
 
                     b.Navigation("Slug")
                         .IsRequired();

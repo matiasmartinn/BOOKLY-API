@@ -6,6 +6,7 @@ namespace BOOKLY.Application.Interfaces
     public interface IServiceApplicationService
     {
         Task<Result<ServiceDto>> GetServiceById(int id, CancellationToken ct = default);
+        Task<Result<List<ServiceDto>>> GetServicesByOwner(int ownerId, CancellationToken ct = default);
         Task<Result<ServiceDto>> CreateService(CreateServiceDto dto, CancellationToken ct = default);
         Task<Result<ServiceDto>> UpdateService(int id, UpdateServiceDto dto, CancellationToken ct = default);
         Task<Result> DeleteService(int id, CancellationToken ct = default);

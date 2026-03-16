@@ -13,14 +13,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         [Range(1, int.MaxValue, ErrorMessage = "El owner ID debe ser mayor a 0")]
         public int OwnerId { get; init; }
 
-        [Required(ErrorMessage = "El slug es requerido")]
-        [StringLength(150, MinimumLength = 2)]
-        [RegularExpression(@"^[a-z0-9-]+$",
-            ErrorMessage = "El slug solo puede contener letras minúsculas, números y guiones")]
-        public string Slug { get; init; } = null!;
-
         [StringLength(500, ErrorMessage = "La descripción no puede exceder 500 caracteres")]
         public string? Description { get; init; }
+        public string Slug { get; init; }
 
         [Required]
         [Range(1, int.MaxValue)]
@@ -29,9 +24,6 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         [Required]
         [Range(5, 480, ErrorMessage = "La duración debe estar entre 5 y 480 minutos")]
         public int DurationMinutes { get; init; }
-
-        [Required]
-        public int Mode { get; init; }
 
         [Range(0, double.MaxValue, ErrorMessage = "El precio no puede ser negativo")]
         public decimal? Price { get; init; }

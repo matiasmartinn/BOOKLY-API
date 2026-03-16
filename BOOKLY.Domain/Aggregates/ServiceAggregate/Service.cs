@@ -1,7 +1,5 @@
 ﻿using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
-using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
-using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.ServiceAggregate
@@ -11,7 +9,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         // Campos privados
         private readonly List<ServiceSecretary> _serviceSecretaries = new();
         private readonly List<ServiceSchedule> _serviceSchedules = new();
-        private readonly List<ServiceScheduleUnavailability> _serviceSchedulesUnavailability = new();
+        private readonly List<ServiceUnavailability> _serviceUnavailability = new();
 
         // Propiedades del agregado
         public int Id { get; private set; }
@@ -29,7 +27,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public IReadOnlyCollection<ServiceSecretary> ServiceSecretaries => _serviceSecretaries.AsReadOnly();
         public IReadOnlyCollection<int> SecretaryIds =>
             _serviceSecretaries.Select(x => x.SecretaryId).ToList().AsReadOnly();
-        public IReadOnlyCollection<ServiceScheduleUnavailability> ServiceSchedulesUnavailability => _serviceSchedulesUnavailability.AsReadOnly();
+        public IReadOnlyCollection<ServiceUnavailability> ServicesUnavailability => _serviceUnavailability.AsReadOnly();
 
 
         // Navegación 
@@ -179,21 +177,38 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             }
         }
 
-        public void AddUnavailability(DateOnly date, TimeRange? range, string? reason)
-        {
-            if (_serviceSchedulesUnavailability.Any(u => u.Date == date && u.Range == range))
-                throw new DomainException("Ya existe una excepción para esa fecha y franja.");
 
-            _serviceSchedulesUnavailability.Add(ServiceScheduleUnavailability.Create(date, range, reason));
+        public bool IsFullDayBlocked(DateOnly date)
+        {
+            return _serviceUnavailability.Any(u => u.BlocksWholeDay(date));
+        }
+
+        public IReadOnlyCollection<TimeRange> GetBlockedRanges(DateOnly date)
+        {
+            return _serviceUnavailability
+                .Where(u => u.AppliesTo(date) && u.TimeRange is not null)
+                .Select(u => u.TimeRange!)
+                .ToList()
+                .AsReadOnly();
+        }
+
+        public void AddUnavailability(DateRange dateRange, TimeRange? timeRange, string? reason)
+        {
+            var newUnavailability = ServiceUnavailability.Create(dateRange, timeRange, reason);
+
+            if (_serviceUnavailability.Any(x => x.OverlapsWith(newUnavailability)))
+                throw new DomainException("Ya existe una inhabilitación que se superpone con el rango indicado.");
+
+            _serviceUnavailability.Add(newUnavailability);
         }
 
         public void RemoveUnavailability(int unavailabilityId)
         {
-            var item = _serviceSchedulesUnavailability.FirstOrDefault(u => u.Id == unavailabilityId);
+            var item = _serviceUnavailability.FirstOrDefault(x => x.Id == unavailabilityId);
             if (item is null)
-                throw new DomainException("La excepción no existe.");
+                throw new DomainException("La inhabilitación no existe.");
 
-            _serviceSchedulesUnavailability.Remove(item);
+            _serviceUnavailability.Remove(item);
         }
 
         //

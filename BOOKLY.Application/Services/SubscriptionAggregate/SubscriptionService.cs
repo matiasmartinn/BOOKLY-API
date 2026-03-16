@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.SubscriptionAggregate
 {
-    public sealed class SubscriptionService : BaseService<SubscriptionService>, ISubscriptionService
+    public sealed class SubscriptionService : ISubscriptionService
     {
         private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IServiceRepository _serviceRepository;
@@ -23,8 +23,8 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             ISubscriptionRepository subscriptionRepository,
             IServiceRepository serviceRepository,
             IMapper mapper,
-            IUnitOfWork unitOfWork,
-            ILogger<SubscriptionService> logger) : base(logger)
+            IUnitOfWork unitOfWork
+)
         {
             _subscriptionRepository = subscriptionRepository;
             _serviceRepository = serviceRepository;
@@ -47,13 +47,10 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (existing != null)
                 return Result<SubscriptionDto>.Success(_mapper.Map<SubscriptionDto>(existing));
 
-            return await Execute(async () =>
-            {
-                var subscription = Subscription.CreateFree(ownerId);
-                await _subscriptionRepository.AddOne(subscription, ct);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<SubscriptionDto>(subscription);
-            });
+            var subscription = Subscription.CreateFree(ownerId);
+            await _subscriptionRepository.AddOne(subscription, ct);
+            await _unitOfWork.SaveChanges(ct);
+            return Result<SubscriptionDto>.Success(_mapper.Map<SubscriptionDto>(subscription));
         }
 
         public async Task<Result> Cancel(int ownerId, CancellationToken ct = default)
@@ -62,12 +59,10 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (subscription == null)
                 return Result.Failure(Error.NotFound("Suscripción"));
 
-            return await Execute(async () =>
-            {
-                subscription.Cancel();
-                _subscriptionRepository.Update(subscription);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            subscription.Cancel();
+            _subscriptionRepository.Update(subscription);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result<SubscriptionDto>> Renew(RenewSubscriptionDto dto, CancellationToken ct = default)
@@ -76,17 +71,13 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (subscription == null)
                 return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
-            return await Execute(async () =>
-            {
-                // Cambiá esto por TU factory real
-                var newPeriod = SubscriptionPeriod.Create(dto.StartDate, dto.EndDate);
+            var newPeriod = SubscriptionPeriod.Create(dto.StartDate, dto.EndDate);
 
-                subscription.Renew(newPeriod);
-                _subscriptionRepository.Update(subscription);
-                await _unitOfWork.SaveChanges(ct);
+            subscription.Renew(newPeriod);
+            _subscriptionRepository.Update(subscription);
+            await _unitOfWork.SaveChanges(ct);
 
-                return _mapper.Map<SubscriptionDto>(subscription);
-            });
+            return Result<SubscriptionDto>.Success(_mapper.Map<SubscriptionDto>(subscription));
         }
 
         public async Task<Result<SubscriptionDto>> ChangePlan(ChangePlanDto dto, CancellationToken ct = default)
@@ -95,32 +86,29 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (subscription == null)
                 return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
-            return await Execute(async () =>
+            var newPlan = ResolvePlan(dto.PlanName);
+
+            // mismo plan => no-op
+            if (newPlan.Name == subscription.Plan.Name)
+                return Result<SubscriptionDto>.Success(_mapper.Map<SubscriptionDto>(subscription));
+
+            // Downgrade => necesita conteos (porque el agregado lo exige)
+            if (newPlan.Name < subscription.Plan.Name)
             {
-                var newPlan = ResolvePlan(dto.PlanName);
+                var currentServices = await _serviceRepository.CountByOwnerId(dto.OwnerId, ct);
+                var currentSecretaries = await _serviceRepository.CountAssignedSecretariesByOwnerId(dto.OwnerId, ct);
 
-                // mismo plan => no-op
-                if (newPlan.Name == subscription.Plan.Name)
-                    return _mapper.Map<SubscriptionDto>(subscription);
+                subscription.DowngradeTo(newPlan, currentServices, currentSecretaries);
+            }
+            else
+            {
+                subscription.UpgradeTo(newPlan);
+            }
 
-                // Downgrade => necesita conteos (porque el agregado lo exige)
-                if (newPlan.Name < subscription.Plan.Name)
-                {
-                    var currentServices = await _serviceRepository.CountByOwnerId(dto.OwnerId, ct);
-                    var currentSecretaries = await _serviceRepository.CountAssignedSecretariesByOwnerId(dto.OwnerId, ct);
+            _subscriptionRepository.Update(subscription);
+            await _unitOfWork.SaveChanges(ct);
 
-                    subscription.DowngradeTo(newPlan, currentServices, currentSecretaries);
-                }
-                else
-                {
-                    subscription.UpgradeTo(newPlan);
-                }
-
-                _subscriptionRepository.Update(subscription);
-                await _unitOfWork.SaveChanges(ct);
-
-                return _mapper.Map<SubscriptionDto>(subscription);
-            });
+            return Result<SubscriptionDto>.Success(_mapper.Map<SubscriptionDto>(subscription));
         }
 
         private static SubscriptionPlan ResolvePlan(PlanName planName)

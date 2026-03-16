@@ -13,11 +13,12 @@ using BOOKLY.Domain.DomainServices;
 
 namespace BOOKLY.Application.Services.ServiceAggregate
 {
-    public class ServiceApplicationService : BaseService<ServiceApplicationService>,IServiceApplicationService
+    public class ServiceApplicationService : IServiceApplicationService
     {
         private readonly IServiceRepository _serviceRepository;
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IAvailabilityService _availabilityService;
+        private readonly IUserRepository _userRepository;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
 
@@ -25,43 +26,55 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             IServiceRepository serviceRepository,
             IAppointmentRepository appointmentRepository,
             IAvailabilityService availabilityService,
+            IUserRepository userRepository,
             IMapper mapper,
-            IUnitOfWork unitOfWork,
-            ILogger<ServiceApplicationService> logger) : base(logger)
+            IUnitOfWork unitOfWork
+            ) 
         {
             _serviceRepository = serviceRepository;
             _appointmentRepository = appointmentRepository;
             _availabilityService = availabilityService;
+            _userRepository = userRepository;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
         }
 
         public async Task<Result<ServiceDto>> GetServiceById(int id, CancellationToken ct = default)
         {
-            var service = await _serviceRepository.GetOneWithSchedules(id, ct);
+            var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(id, ct);
             if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
             return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
         }
+
+        public async Task<Result<List<ServiceDto>>> GetServicesByOwner(int ownerId, CancellationToken ct = default)
+        {
+            var user = await _userRepository.GetOne(ownerId, ct);
+            if (user == null)
+                return Result<List<ServiceDto>>.Failure(Error.NotFound("Usuario"));
+
+            var services = await _serviceRepository.GetServicesByOwner(ownerId, ct);
+            if (!services.Any())
+                return Result<List<ServiceDto>>.Failure(Error.NotFound("Services"));
+
+            return Result<List<ServiceDto>>.Success(_mapper.Map<List<ServiceDto>>(services));
+        }
         public async Task<Result<ServiceDto>> CreateService(CreateServiceDto dto, CancellationToken ct = default)
         {
-            return await Execute(async () =>
-            {
-                var service = Service.Create(
-                    dto.Name,
-                    dto.OwnerId,
-                    dto.Slug,
-                    dto.Description,
-                    dto.ServiceTypeId,
-                    Duration.Create(dto.DurationMinutes),
-                    (Mode)dto.Mode,
-                    dto.Price
-                );
-                await _serviceRepository.AddOne(service);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceDto>(service);
-            });
+            var service = Service.Create(
+                dto.Name,
+                dto.OwnerId,
+                dto.Slug,
+                dto.Description,
+                dto.ServiceTypeId,
+                Duration.Create(dto.DurationMinutes),
+                Mode.Presence,
+                dto.Price
+            );
+            await _serviceRepository.AddOne(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
         }
 
         public async Task<Result<ServiceDto>> UpdateService(int id, UpdateServiceDto dto, CancellationToken ct = default)
@@ -71,28 +84,24 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if(service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-
-                if(dto.Name != null) {
-                    service.ChangeName(dto.Name);
-                }
-                if(dto.Slug != null) {
-                    service.ChangeSlug(dto.Slug);
-                }
-                if(dto.Description != null) {
-                    service.ChangeDescription(dto.Description);
-                }
-                if(dto.DurationMinutes != null ) {
-                    service.ChangeDuration(dto.DurationMinutes.Value);
-                }
-                if(dto.Price != null){
-                    service.ChangePrice(dto.Price.Value);
-                }
-                _serviceRepository.Update(service);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceDto>(service);
-            });
+            if(dto.Name != null) {
+                service.ChangeName(dto.Name);
+            }
+            if(dto.Slug != null) {
+                service.ChangeSlug(dto.Slug);
+            }
+            if(dto.Description != null) {
+                service.ChangeDescription(dto.Description);
+            }
+            if(dto.DurationMinutes != null ) {
+                service.ChangeDuration(dto.DurationMinutes.Value);
+            }
+            if(dto.Price != null){
+                service.ChangePrice(dto.Price.Value);
+            }
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
         }
 
         public async Task<Result> DeleteService(int id, CancellationToken ct = default)
@@ -100,13 +109,11 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             var service = await _serviceRepository.GetOne(id, ct);
 
             if (service == null)
-                return Result.Failure(Error.NotFound("Servicio"));
-
-            return await Execute(async () =>
-            {
-                _serviceRepository.Remove(service);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            return Result.Failure(Error.NotFound("Servicio"));
+            
+            _serviceRepository.Remove(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result<ServiceDto>> SetSchedule(int id, List<CreateServiceScheduleDto> dto, CancellationToken ct = default)
@@ -116,23 +123,19 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (services == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-
-                var schedules = dto
-                    .Select(s =>
-                        ServiceSchedule.Create(
-                            TimeRange.Create(s.StartTime, s.EndTime),
-                            Capacity.Create(s.Capacity),
-                            Day.Create(s.Day)
-                        )
-                    ).ToList();
-                services.SetSchedules(schedules);
-                
-                _serviceRepository.Update(services);
-                await _unitOfWork.SaveChanges(ct);
-                return _mapper.Map<ServiceDto>(services);
-            });
+            var schedules = dto
+                .Select(s =>
+                    ServiceSchedule.Create(
+                        TimeRange.Create(s.StartTime, s.EndTime),
+                        Capacity.Create(s.Capacity),
+                        Day.Create(s.Day)
+                    )
+                ).ToList();
+            services.SetSchedules(schedules);
+            
+            _serviceRepository.Update(services);
+            await _unitOfWork.SaveChanges(ct);
+            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(services));
         }
 
         // ========== UNAVAILABILITIES ==========
@@ -143,7 +146,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result<List<ScheduleUnavailabilityDto>>.Failure(Error.NotFound("Servicio"));
 
-            var dto = _mapper.Map<List<ScheduleUnavailabilityDto>>(service.ServiceSchedulesUnavailability);
+            var dto = _mapper.Map<List<ScheduleUnavailabilityDto>>(service.ServicesUnavailability);
             return Result<List<ScheduleUnavailabilityDto>>.Success(dto);
         }
         public async Task<Result> AddUnavailability(int id, CreateUnavailabilityDto dto, CancellationToken ct = default)
@@ -152,16 +155,22 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-                var range = dto.Start.HasValue && dto.End.HasValue
-                    ? TimeRange.Create(dto.Start.Value, dto.End.Value)
-                    : null;
+            var hasOnlyOneTime = dto.StartTime.HasValue != dto.EndTime.HasValue;
+            if (hasOnlyOneTime)
+                return Result.Failure(Error.Validation("Debe indicar hora de inicio y fin, o ninguna."));
 
-                service.AddUnavailability(dto.Date, range, dto.Reason);
-                _serviceRepository.Update(service);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            var dateRange = DateRange.Create(dto.StartDate, dto.EndDate);
+
+            var timeRange = dto.StartTime.HasValue && dto.EndTime.HasValue
+                ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
+                : null;
+
+            service.AddUnavailability(dateRange, timeRange, dto.Reason);
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         public async Task<Result> RemoveUnavailability(int id, int unavailabilityId, CancellationToken ct = default)
@@ -170,12 +179,12 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-                service.RemoveUnavailability(unavailabilityId);
-                _serviceRepository.Update(service);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            service.RemoveUnavailability(unavailabilityId);
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result.Success();
         }
 
         // ========== ACTIVATE / DEACTIVATE ==========
@@ -185,12 +194,10 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-                service.Activate();
-                _serviceRepository.Update(service);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            service.Activate();
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
         public async Task<Result> Deactivate(int id, CancellationToken ct = default)
         {
@@ -198,12 +205,10 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            return await Execute(async () =>
-            {
-                service.Deactivate();
-                _serviceRepository.Update(service);
-                await _unitOfWork.SaveChanges(ct);
-            });
+            service.Deactivate();
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         // GET SLOTS

@@ -6,11 +6,11 @@ namespace BOOKLY.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class UserController : BaseController
+    public class UsersController : BaseController
     {
         private readonly IUserService _userService;
 
-        public UserController (IUserService userService)
+        public UsersController (IUserService userService)
         {
             _userService = userService;
         }
@@ -25,21 +25,6 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _userService.GetUserById(id, ct));
         }
 
-        /// <summary>
-        /// Crea un nuevo owner.
-        /// </summary>
-        [HttpPost]
-        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> RegisterOwner([FromBody] CreateUserDto dto, CancellationToken ct)
-        {
-            var result = await _userService.RegisterOwner(dto, ct);
-
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result.Data)
-                : HandleResult(result);
-        }
         /// <summary>
         /// Actualiza los datos de un usuario existente aplicando validaciones de dominio.
         /// </summary>
@@ -57,10 +42,10 @@ namespace BOOKLY.Api.Controllers
         [HttpDelete("{id}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Delete(int id, CancellationToken ct)
         {
             return HandleResult(await _userService.DeleteUser(id, ct));
         }
+
     }
 }

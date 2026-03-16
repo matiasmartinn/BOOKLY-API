@@ -1,4 +1,5 @@
-﻿using BOOKLY.Domain.SharedKernel;
+﻿using BOOKLY.Domain.Interfaces;
+using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.UserAggregate
 {
@@ -16,7 +17,7 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
         private User() { }
 
         // Factory Method
-        public static User RegisterAsOwner(PersonName personName, Email email, Password password)
+        public static User CreateOwner(PersonName personName, Email email, Password password)
             => Create(personName, email, password, UserKind.Owner);
         public static User CreateSecretary(PersonName personName, Email email)
             => Create(personName, email, null,UserKind.Secretary, false);
@@ -28,6 +29,7 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
         {
             return new User
             {
+                PersonName = personName,
                 Email = email,
                 Role = role,
                 Password = password ?? null,
@@ -52,6 +54,12 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
                 return;
 
             Email = email;
+        }
+
+        public bool VerifyPassword(string plainPassword, IPasswordHasher hasher)
+        {
+            if (Password is null) return false;
+            return hasher.Verify(plainPassword, Password.Hash);
         }
         public void Deactivate()
         {
