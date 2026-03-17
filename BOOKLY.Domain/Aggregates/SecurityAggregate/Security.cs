@@ -1,4 +1,5 @@
 ﻿using BOOKLY.Domain;
+using BOOKLY.Domain.Exceptions;
 public sealed class Security
 {
     private readonly List<ServiceMembership> _memberships = new();

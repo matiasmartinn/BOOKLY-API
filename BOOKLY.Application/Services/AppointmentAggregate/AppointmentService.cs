@@ -29,26 +29,26 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<Result<List<AppointmentDto>>> GetByService(int serviceId, CancellationToken ct = default)
+        public async Task<Result<IReadOnlyCollection<AppointmentDto>>> GetByService(int serviceId, CancellationToken ct = default)
         {
             var service = await _serviceRepository.GetOne(serviceId, ct);
         
             if (service == null)
-                    return Result<List<AppointmentDto>>.Failure(Error.NotFound("Servicio"));
+                    return Result<IReadOnlyCollection<AppointmentDto>>.Failure(Error.NotFound("Servicio"));
 
             var appointments = await _repository.GetByService(serviceId, ct);
-            return Result<List<AppointmentDto>>.Success(_mapper.Map<List<AppointmentDto>>(appointments));
+            return Result<IReadOnlyCollection<AppointmentDto>>.Success(_mapper.Map<IReadOnlyCollection<AppointmentDto>>(appointments));
 
         }
 
-        public async Task<Result<List<AppointmentSummaryDto>>> GetByServiceAndDate(int serviceId,DateOnly date, CancellationToken ct = default)
+        public async Task<Result<IReadOnlyCollection<AppointmentSummaryDto>>> GetByServiceAndDate(int serviceId,DateOnly date, CancellationToken ct = default)
         {
             var service = await _serviceRepository.GetOne(serviceId, ct);
             if (service == null)
-                return Result<List<AppointmentSummaryDto>>.Failure(Error.NotFound("Servicio"));
+                return Result<IReadOnlyCollection<AppointmentSummaryDto>>.Failure(Error.NotFound("Servicio"));
 
             var appointments = await _repository.GetByServiceAndDate(serviceId, date, ct);
-            return Result<List<AppointmentSummaryDto>>.Success(_mapper.Map<List<AppointmentSummaryDto>>(appointments));
+            return Result<IReadOnlyCollection<AppointmentSummaryDto>>.Success(_mapper.Map<IReadOnlyCollection<AppointmentSummaryDto>>(appointments));
         }
         public async Task<Result<AppointmentDto>> CreateAppointment(CreateAppointmentDto dto, CancellationToken ct = default)
         {

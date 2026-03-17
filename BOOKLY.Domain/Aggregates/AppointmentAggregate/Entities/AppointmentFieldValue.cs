@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities
 {
     public sealed class AppointmentFieldValue
     {

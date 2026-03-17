@@ -1,5 +1,6 @@
 ﻿using BOOKLY.Application.Common.Models;
 using BOOKLY.Domain;
+using BOOKLY.Domain.Exceptions;
 
 namespace BOOKLY.Application.Common.Validators
 {

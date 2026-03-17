@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.UserAggregate
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.UserAggregate
 {
     public sealed class UserInvitation
     {

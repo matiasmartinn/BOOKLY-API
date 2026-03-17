@@ -1,4 +1,4 @@
-﻿namespace BOOKLY.Domain
+﻿namespace BOOKLY.Domain.Exceptions
 {
     public class DomainException : Exception
     {

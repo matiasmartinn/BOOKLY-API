@@ -27,5 +27,8 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
 
         [Range(0, double.MaxValue, ErrorMessage = "El precio no puede ser negativo")]
         public decimal? Price { get; init; }
+
+        [Required]
+        public List<CreateServiceScheduleDto> Schedules { get; init; } = null!;
     }
 }

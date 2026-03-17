@@ -1,4 +1,5 @@
-﻿using BOOKLY.Domain.SharedKernel;
+﻿using BOOKLY.Domain.Exceptions;
+using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
 {

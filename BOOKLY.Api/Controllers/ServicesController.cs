@@ -18,7 +18,7 @@ namespace BOOKLY.Api.Controllers
 
         #region Basic Crud
         /// <summary>
-        /// Recupera un servicio junto con su configuración inicial, horarios e inhabilitaciones.
+        /// Recupera un servicio junto con su configuración básica.
         /// </summary>
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
@@ -29,6 +29,9 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _serviceApplicationService.GetServiceById(id, ct));
         }
 
+        /// <summary>
+        /// Recupera todos los servicios del usuario.
+        /// </summary>
         [HttpGet]
         [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -76,6 +79,22 @@ namespace BOOKLY.Api.Controllers
         #endregion
 
         #region Schedules
+        [HttpGet("{id}/schedules")]
+        [ProducesResponseType(typeof(IEnumerable<ServiceScheduleDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetSchedules(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.GetSchedulesByService(id, ct));
+        }
+
+        [HttpGet("{id}/unavailability")]
+        [ProducesResponseType(typeof(IEnumerable<ScheduleUnavailabilityDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetUnavailability(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.GetUnavailabilityByService(id, ct));
+        }
+
         /// <summary>
         /// Define o reemplaza la configuración de horarios disponibles de un servicio.
         /// </summary>
@@ -93,12 +112,12 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Calcula y devuelve los turnos disponibles para un servicio en una fecha determinada.
         /// </summary>
-        [HttpGet("{serviceId}/available-slots/{date}")]
+        [HttpGet("{id}/available-slots/{date}")]
         [ProducesResponseType(typeof(List<DateTime>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetAvailableSlots(int serviceId, DateOnly date, CancellationToken ct)
+        public async Task<IActionResult> GetAvailableSlots(int id, DateOnly date, CancellationToken ct)
         {
-            return HandleResult(await _serviceApplicationService.GetAvailableSlots(serviceId, date, ct));
+            return HandleResult(await _serviceApplicationService.GetAvailableSlots(id, date, ct));
         }
 
         #endregion
@@ -118,6 +137,7 @@ namespace BOOKLY.Api.Controllers
         {
             return HandleResult(await _serviceApplicationService.AddUnavailability(id, dto, ct));
         }
+
         /// <summary>
         /// Elimina una excepción de disponibilidad previamente configurada.
         /// </summary>
@@ -131,7 +151,6 @@ namespace BOOKLY.Api.Controllers
         {
             return HandleResult(await _serviceApplicationService.RemoveUnavailability(id, unavailabilityId, ct));
         }
-
         #endregion
 
         #region enabled

@@ -19,6 +19,7 @@ namespace BOOKLY.Application.Mappings
 
             // ServiceSchedule → ServiceScheduleDto
             CreateMap<ServiceSchedule, ServiceScheduleDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s.Id))
                 .ForMember(d => d.StartTime, o => o.MapFrom(s => s.Range.Start))
                 .ForMember(d => d.EndTime, o => o.MapFrom(s => s.Range.End))
                 .ForMember(d => d.Capacity, o => o.MapFrom(s => s.Capacity.Value))
@@ -26,6 +27,7 @@ namespace BOOKLY.Application.Mappings
                 .ForMember(d => d.DayValue, o => o.MapFrom(s => s.Day.Value));
 
             CreateMap<ServiceUnavailability, ScheduleUnavailabilityDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s.Id))
                 .ForMember(d => d.StartDate, o => o.MapFrom(s => s.DateRange.Start))
                 .ForMember(d => d.EndDate, o => o.MapFrom(s => s.DateRange.End))
                 .ForMember(d => d.StartTime, o => o.MapFrom(s => s.TimeRange != null ? s.TimeRange.Start : (TimeOnly?)null))

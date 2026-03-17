@@ -6,11 +6,11 @@ namespace BOOKLY.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AppointmentController : BaseController
+    public class AppointmentsController : BaseController
     {
         private readonly IAppointmentService _appointmentService;
 
-        public AppointmentController(IAppointmentService appointmentService)
+        public AppointmentsController(IAppointmentService appointmentService)
         {
             _appointmentService = appointmentService;
         }
@@ -19,7 +19,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Obtiene todos los turnos asociados a un servicio específico.
         /// </summary>
-        [HttpGet("service/{serviceId}")]
+        [HttpGet("{serviceId}")]
         [ProducesResponseType(typeof(List<AppointmentDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetByService(int serviceId, CancellationToken ct)
@@ -29,7 +29,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Obtiene los turnos de un servicio específico filtrados por una fecha determinada.
         /// </summary>
-        [HttpGet("service/{serviceId}/date/{date}")]
+        [HttpGet("{serviceId}/date/{date}")]
         [ProducesResponseType(typeof(List<AppointmentSummaryDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetByServiceAndDate(int serviceId, DateOnly date, CancellationToken ct)

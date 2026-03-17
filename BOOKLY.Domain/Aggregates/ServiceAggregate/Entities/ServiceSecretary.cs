@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.ServiceAggregate.Entities
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.ServiceAggregate.Entities
 {
     public sealed class ServiceSecretary
     {

@@ -1,4 +1,5 @@
-﻿using BOOKLY.Domain.Interfaces;
+﻿using BOOKLY.Domain.Exceptions;
+using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.UserAggregate

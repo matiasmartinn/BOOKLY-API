@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.SharedKernel
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.SharedKernel
 {
     public record Email
     {

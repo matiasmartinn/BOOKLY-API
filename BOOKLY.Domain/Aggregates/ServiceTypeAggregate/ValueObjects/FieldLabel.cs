@@ -1,4 +1,6 @@
 ﻿// BOOKLY.Infrastructure/Persistence/Configurations/SubscriptionRepository.cs
+using BOOKLY.Domain.Exceptions;
+
 namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects
 {
     public sealed record FieldLabel

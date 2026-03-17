@@ -41,7 +41,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 
         public async Task<Result<ServiceDto>> GetServiceById(int id, CancellationToken ct = default)
         {
-            var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(id, ct);
+            var service = await _serviceRepository.GetOne(id, ct);
             if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
@@ -72,6 +72,18 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 Mode.Presence,
                 dto.Price
             );
+
+            var schedules = dto.Schedules
+                .Select(s =>
+                    ServiceSchedule.Create(
+                        TimeRange.Create(s.StartTime, s.EndTime),
+                        Capacity.Create(s.Capacity),
+                        Day.Create(s.Day)
+                    )
+                ).ToList();
+
+            service.SetSchedules(schedules);
+
             await _serviceRepository.AddOne(service);
             await _unitOfWork.SaveChanges(ct);
             return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
@@ -114,6 +126,28 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             _serviceRepository.Remove(service);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
+        }
+
+        public async Task<Result<IEnumerable<ServiceScheduleDto>>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<IEnumerable<ServiceScheduleDto>>.Failure(Error.NotFound("Servicio"));
+
+            var schedules = await _serviceRepository.GetSchedulesByService(serviceId, ct);
+            
+            return Result<IEnumerable<ServiceScheduleDto>>.Success(_mapper.Map<IEnumerable<ServiceScheduleDto>>(schedules));
+        }
+
+        public async Task<Result<IEnumerable<ScheduleUnavailabilityDto>>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<IEnumerable<ScheduleUnavailabilityDto>>.Failure(Error.NotFound("Servicio"));
+
+            var unavailability = await _serviceRepository.GetUnavailabilityByService(serviceId, ct);
+
+            return Result<IEnumerable<ScheduleUnavailabilityDto>>.Success(_mapper.Map<IEnumerable<ScheduleUnavailabilityDto>>(unavailability));
         }
 
         public async Task<Result<ServiceDto>> SetSchedule(int id, List<CreateServiceScheduleDto> dto, CancellationToken ct = default)

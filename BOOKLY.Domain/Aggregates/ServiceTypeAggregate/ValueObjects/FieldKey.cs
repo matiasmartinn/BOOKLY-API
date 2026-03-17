@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects
 {
     /// <summary>
     /// Codigo que se almacena en DB.

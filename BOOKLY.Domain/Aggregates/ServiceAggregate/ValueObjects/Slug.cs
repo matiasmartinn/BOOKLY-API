@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
 {
     public record Slug
     {

@@ -1,5 +1,6 @@
 ﻿using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.ServiceAggregate
@@ -146,9 +147,12 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             _serviceSecretaries.AddRange(secretaryIds.Select(ServiceSecretary.Create));
         }
 
-        public void SetSchedules(List<ServiceSchedule> schedules)
+        public void SetSchedules(IEnumerable<ServiceSchedule> schedules)
         {
-            if (schedules == null || !schedules.Any())
+            var schedulesList = schedules?.ToList()
+                ?? throw new DomainException("Debe proporcionar al menos un horario");
+
+            if (!schedulesList.Any())
                 throw new DomainException("Debe proporcionar al menos un horario");
 
             // Validar que horarios no se solapan
@@ -157,7 +161,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             _serviceSchedules.Clear();
             _serviceSchedules.AddRange(schedules);
         }
-        private void ValidateNoOverlappingSchedules(List<ServiceSchedule> schedules)
+        private void ValidateNoOverlappingSchedules(IEnumerable<ServiceSchedule> schedules)
         {
             // Agrupar por dia
             var schedulesByDay = schedules.GroupBy(s => s.Day.Value);
@@ -172,7 +176,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                     var next = orderedSchedules[i + 1];
 
                     if (current.Range.End > next.Range.Start)
-                        throw new DomainException($"Schedule overlap detected on {dayGroup.Key}");
+                        throw new DomainException($"Existen horarios solapados para el día {dayGroup.Key}.");
                 }
             }
         }

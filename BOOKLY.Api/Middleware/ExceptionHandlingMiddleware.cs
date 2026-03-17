@@ -1,5 +1,4 @@
-﻿using BOOKLY.Domain;
-using Microsoft.AspNetCore.Mvc;
+﻿using BOOKLY.Domain.Exceptions;
 using System.Net;
 
 namespace BOOKLY.Api.Middleware
@@ -25,6 +24,11 @@ namespace BOOKLY.Api.Middleware
             try
             {
                 await _next(context);
+            }
+            catch (ConflictException ex)
+            {
+                _logger.LogWarning(ex, "Conflicto de datos en {Path}", context.Request.Path);
+                await WriteProblemDetails(context, HttpStatusCode.Conflict, "Conflicto de datos", ex.Message);
             }
             catch (DomainException ex)
             {

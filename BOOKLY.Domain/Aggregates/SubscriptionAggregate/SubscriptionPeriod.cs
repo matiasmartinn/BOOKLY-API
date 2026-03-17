@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
 {
     public sealed record SubscriptionPeriod
     {

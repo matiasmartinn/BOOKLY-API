@@ -1,6 +1,7 @@
 ﻿// Security ahora modela "qué puede hacer un Secretary en un Service"
 // Los permisos son fijos — el Owner solo activa/desactiva
 using BOOKLY.Domain;
+using BOOKLY.Domain.Exceptions;
 // ── ENTITY ───────────────────────────────────────────────────────────────────
 
 public sealed class ServiceMembership

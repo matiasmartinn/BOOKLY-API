@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
 {
     public sealed class ServiceTypeFieldOption
     {

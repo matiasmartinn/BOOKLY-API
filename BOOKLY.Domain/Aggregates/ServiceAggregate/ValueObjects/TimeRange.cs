@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
+﻿using BOOKLY.Domain.Exceptions;
+
+namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
 {
     /// <summary>
     /// Horario de inicio y fin.

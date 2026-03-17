@@ -16,7 +16,6 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .Include(s => s.ServiceSchedules)
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
-
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default)
         {
             return dbContext.Services
@@ -51,6 +50,23 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
+        public async Task<IEnumerable<ServiceSchedule?>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
+        {
+            return await dbContext.Services
+                .Where(s => s.Id == serviceId)
+                .SelectMany(s => s.ServiceSchedules)
+                .AsNoTracking()
+                .ToListAsync(ct);
+        }
+
+        public async Task<IEnumerable<ServiceUnavailability?>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default)
+        {
+            return await dbContext.Services
+                .Where(s => s.Id == serviceId)
+                .SelectMany(s => s.ServicesUnavailability)
+                .AsNoTracking()
+                .ToListAsync(ct);
+        }
         public async Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default)
         {
             return await dbContext.Services

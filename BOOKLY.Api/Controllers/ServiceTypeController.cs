@@ -1,6 +1,5 @@
 ﻿using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.ServiceTypeAggregate.DTOs;
-using BOOKLY.Application.Services.ServiceTypeAggregate;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers

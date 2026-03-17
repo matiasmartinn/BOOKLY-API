@@ -1,6 +1,7 @@
 ﻿using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.AppointmentAggregate

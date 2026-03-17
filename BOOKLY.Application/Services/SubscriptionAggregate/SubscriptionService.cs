@@ -5,6 +5,7 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using BOOKLY.Domain;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure.Repositories;

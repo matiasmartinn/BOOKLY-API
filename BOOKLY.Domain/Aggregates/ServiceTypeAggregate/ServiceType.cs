@@ -1,6 +1,7 @@
 ﻿using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects;
+using BOOKLY.Domain.Exceptions;
 
 namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
 {
