@@ -8,9 +8,9 @@ namespace BOOKLY.Application.Interfaces
     {
         Task<Result<UserDto>> GetUserById(int id, CancellationToken ct = default);
         Task<Result<UserDto>> Login(LoginDto dto, CancellationToken ct = default);
-        Task<Result<UserDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default);
+        Task<Result<RegisterOwnerResultDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default);
         Task<Result> ConfirmEmail(ConfirmEmailDto dto, CancellationToken ct = default);
-        Task<Result> ResendEmailConfirmation(ResendEmailConfirmationDto dto, CancellationToken ct = default);
+        Task<Result<EmailDispatchResultDto>> ResendEmailConfirmation(ResendEmailConfirmationDto dto, CancellationToken ct = default);
         Task<Result> RequestPasswordReset(RequestPasswordResetDto dto, CancellationToken ct = default);
         Task<Result> ResetPassword(ResetPasswordDto dto, CancellationToken ct = default);
         Task<Result<IReadOnlyCollection<SecretaryDto>>> GetSecretariesByOwner(int ownerId, CancellationToken ct = default);

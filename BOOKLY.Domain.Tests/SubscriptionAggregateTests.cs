@@ -97,4 +97,14 @@ public sealed class SubscriptionAggregateTests
         Assert.Null(subscription.Period.EndDate);
         Assert.Equal(downgradeNow, subscription.UpdatedOn);
     }
+
+    [Fact]
+    public void CreateMonthly_ShouldUseTheSameMonthlyRuleAcrossTheDomain()
+    {
+        var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2026, 3, 31));
+
+        Assert.Equal(new DateOnly(2026, 3, 31), period.StartDate);
+        Assert.Equal(new DateOnly(2026, 4, 30), period.EndDate);
+        Assert.False(period.IsOpenEnded);
+    }
 }

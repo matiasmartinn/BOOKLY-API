@@ -1,4 +1,5 @@
 using BOOKLY.Application.Common.Models;
+using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
@@ -9,10 +10,6 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 {
     public sealed class SubscriptionService : ISubscriptionService
     {
-        private const string FreeRequiresNoPeriodMessage = "El plan Free no utiliza período.";
-        private const string PaidPlanRequiresPeriodMessage = "Para activar un plan pago debe indicar StartDate y EndDate.";
-        private const string ExpiredPlanRequiresPeriodMessage = "La suscripción actual está vencida. Debe indicar StartDate y EndDate para activar el nuevo plan.";
-
         private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IServiceRepository _serviceRepository;
         private readonly IDateTimeProvider _dateTimeProvider;
@@ -32,8 +29,9 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<SubscriptionDto>> GetByOwnerId(int ownerId, CancellationToken ct = default)
         {
-            if (ownerId <= 0)
-                return Result<SubscriptionDto>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateOwnerId(ownerId);
+            if (validation.IsFailure)
+                return Result<SubscriptionDto>.Failure(validation.Error);
 
             var now = _dateTimeProvider.NowArgentina();
             var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
@@ -43,17 +41,17 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<IReadOnlyCollection<SubscriptionPlanOptionDto>>> GetPlanOptions(int ownerId, CancellationToken ct = default)
         {
-            if (ownerId <= 0)
-                return Result<IReadOnlyCollection<SubscriptionPlanOptionDto>>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateOwnerId(ownerId);
+            if (validation.IsFailure)
+                return Result<IReadOnlyCollection<SubscriptionPlanOptionDto>>.Failure(validation.Error);
 
             var now = _dateTimeProvider.NowArgentina();
-            var today = DateOnly.FromDateTime(now);
             var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
             var current = subscription ?? Subscription.CreateFree(ownerId, now);
             var (currentServices, currentSecretaries) = await GetOwnerCounts(ownerId, ct);
 
             var options = SubscriptionPlan.GetCatalog()
-                .Select(plan => BuildPlanOption(plan, current, today, currentServices, currentSecretaries))
+                .Select(plan => BuildPlanOption(plan, current, currentServices, currentSecretaries))
                 .ToList()
                 .AsReadOnly();
 
@@ -62,8 +60,9 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<SubscriptionDto>> CreateFreeIfMissing(int ownerId, CancellationToken ct = default)
         {
-            if (ownerId <= 0)
-                return Result<SubscriptionDto>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateOwnerId(ownerId);
+            if (validation.IsFailure)
+                return Result<SubscriptionDto>.Failure(validation.Error);
 
             var now = _dateTimeProvider.NowArgentina();
             var existing = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
@@ -79,8 +78,9 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<SubscriptionDto>> Cancel(int ownerId, CancellationToken ct = default)
         {
-            if (ownerId <= 0)
-                return Result<SubscriptionDto>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateOwnerId(ownerId);
+            if (validation.IsFailure)
+                return Result<SubscriptionDto>.Failure(validation.Error);
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(ownerId, ct);
             if (subscription == null)
@@ -97,15 +97,16 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<SubscriptionDto>> Renew(RenewSubscriptionDto dto, CancellationToken ct = default)
         {
-            if (dto.OwnerId <= 0)
-                return Result<SubscriptionDto>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateRenew(dto);
+            if (validation.IsFailure)
+                return Result<SubscriptionDto>.Failure(validation.Error);
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
             if (subscription == null)
                 return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
             var now = _dateTimeProvider.NowArgentina();
-            var newPeriod = SubscriptionPeriod.Create(dto.StartDate, dto.EndDate);
+            var newPeriod = CreatePaidMonthlyPeriod(now);
 
             subscription.Renew(newPeriod, now);
             _subscriptionRepository.Update(subscription);
@@ -116,24 +117,20 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
         public async Task<Result<SubscriptionDto>> ChangePlan(ChangePlanDto dto, CancellationToken ct = default)
         {
-            if (dto.OwnerId <= 0)
-                return Result<SubscriptionDto>.Failure(Error.Validation("OwnerId inválido."));
+            var validation = SubscriptionRequestValidator.ValidateChangePlan(dto);
+            if (validation.IsFailure)
+                return Result<SubscriptionDto>.Failure(validation.Error);
 
             var planResult = ResolvePlan(dto);
             if (planResult.Error is not null)
                 return Result<SubscriptionDto>.Failure(planResult.Error);
 
-            var periodResult = BuildRequestedPeriod(dto.StartDate, dto.EndDate);
-            if (periodResult.Error is not null)
-                return Result<SubscriptionDto>.Failure(periodResult.Error);
-
             var newPlan = planResult.Plan!;
-            var requestedPeriod = periodResult.Period;
             var now = _dateTimeProvider.NowArgentina();
             var today = DateOnly.FromDateTime(now);
-
-            if (newPlan.Name == PlanName.Free && requestedPeriod is not null)
-                return Result<SubscriptionDto>.Failure(Error.Validation(FreeRequiresNoPeriodMessage));
+            var paidPeriod = newPlan.Name == PlanName.Free
+                ? null
+                : CreatePaidMonthlyPeriod(now);
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
 
@@ -147,16 +144,13 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
                     return Result<SubscriptionDto>.Success(MapSubscription(freeSubscription, dto.OwnerId, now));
                 }
 
-                if (requestedPeriod is null)
-                    return Result<SubscriptionDto>.Failure(Error.Validation(PaidPlanRequiresPeriodMessage));
-
-                var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, requestedPeriod, now);
+                var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, paidPeriod!, now);
                 await _subscriptionRepository.AddOne(paidSubscription, ct);
                 await _unitOfWork.SaveChanges(ct);
                 return Result<SubscriptionDto>.Success(MapSubscription(paidSubscription, dto.OwnerId, now));
             }
 
-            if (newPlan.Name == subscription.Plan.Name && requestedPeriod is null)
+            if (newPlan.Name == subscription.Plan.Name)
                 return Result<SubscriptionDto>.Success(MapSubscription(subscription, dto.OwnerId, now));
 
             if (newPlan.Name == PlanName.Free)
@@ -166,16 +160,10 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             }
             else if (subscription.Plan.Name == PlanName.Free)
             {
-                if (requestedPeriod is null)
-                    return Result<SubscriptionDto>.Failure(Error.Validation(PaidPlanRequiresPeriodMessage));
-
-                subscription.SwitchFromFreeToPaid(newPlan, requestedPeriod, now);
+                subscription.SwitchFromFreeToPaid(newPlan, paidPeriod!, now);
             }
             else
             {
-                if (subscription.IsExpired(today) && requestedPeriod is null && newPlan.Name != subscription.Plan.Name)
-                    return Result<SubscriptionDto>.Failure(Error.Validation(ExpiredPlanRequiresPeriodMessage));
-
                 if (newPlan.Name < subscription.Plan.Name)
                 {
                     var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
@@ -186,8 +174,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
                     subscription.UpgradeTo(newPlan, now);
                 }
 
-                if (requestedPeriod is not null)
-                    subscription.Renew(requestedPeriod, now);
+                subscription.Renew(paidPeriod!, now);
             }
 
             _subscriptionRepository.Update(subscription);
@@ -230,7 +217,6 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
         private static SubscriptionPlanOptionDto BuildPlanOption(
             SubscriptionPlan plan,
             Subscription current,
-            DateOnly today,
             int currentServices,
             int currentSecretaries)
         {
@@ -258,8 +244,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
                 IsCurrent = isCurrent,
                 ChangeType = GetChangeType(plan.Name, current.Plan.Name),
                 CanChange = canChange,
-                RequiresPeriod = plan.Name != PlanName.Free &&
-                    (current.Plan.Name == PlanName.Free || current.IsExpired(today) || current.Period.IsOpenEnded),
+                RequiresPeriod = false,
                 UnavailableReason = unavailableReason
             };
         }
@@ -322,15 +307,9 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             return (null, Error.Validation("Debe indicar el plan destino."));
         }
 
-        private static (SubscriptionPeriod? Period, Error? Error) BuildRequestedPeriod(DateOnly? startDate, DateOnly? endDate)
+        private static SubscriptionPeriod CreatePaidMonthlyPeriod(DateTime now)
         {
-            if (!startDate.HasValue && !endDate.HasValue)
-                return (null, null);
-
-            if (!startDate.HasValue || !endDate.HasValue)
-                return (null, Error.Validation("Debe indicar StartDate y EndDate juntos."));
-
-            return (SubscriptionPeriod.Create(startDate.Value, endDate.Value), null);
+            return SubscriptionPeriod.CreateMonthly(DateOnly.FromDateTime(now));
         }
 
         private static bool TryParsePlanName(string rawValue, out PlanName planName)

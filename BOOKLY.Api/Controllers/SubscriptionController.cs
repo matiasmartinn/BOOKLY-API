@@ -1,4 +1,4 @@
-﻿using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using Microsoft.AspNetCore.Mvc;
 
@@ -62,7 +62,7 @@ namespace BOOKLY.Api.Controllers
         }
 
         /// <summary>
-        /// Renueva manualmente la suscripción.
+        /// Renueva manualmente la suscripción usando un período mensual automático.
         /// </summary>
         [HttpPost("renew")]
         [ProducesResponseType(typeof(SubscriptionDto), StatusCodes.Status200OK)]
@@ -74,7 +74,7 @@ namespace BOOKLY.Api.Controllers
         }
 
         /// <summary>
-        /// Cambia el plan (Upgrade o Downgrade).
+        /// Cambia el plan (Upgrade o Downgrade). Los planes pagos generan un nuevo período mensual automático.
         /// </summary>
         [HttpPost("change-plan")]
         [ProducesResponseType(typeof(SubscriptionDto), StatusCodes.Status200OK)]

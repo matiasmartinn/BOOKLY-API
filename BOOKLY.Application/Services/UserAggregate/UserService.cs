@@ -91,14 +91,14 @@ namespace BOOKLY.Application.Services.UserAggregate
             return Result<UserDto>.Success(_mapper.Map<UserDto>(user));
         }
 
-        public async Task<Result<UserDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default)
+        public async Task<Result<RegisterOwnerResultDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default)
         {
             if (await _userRepository.ExistsByEmail(dto.Email, ct))
-                return Result<UserDto>.Failure(Error.Conflict("Email ya está registrado."));
+                return Result<RegisterOwnerResultDto>.Failure(Error.Conflict("Email ya está registrado."));
 
             var passwordValidation = PasswordValidator.Validate(dto.Password);
             if (!passwordValidation.IsSuccess)
-                return Result<UserDto>.Failure(passwordValidation.Error!);
+                return Result<RegisterOwnerResultDto>.Failure(passwordValidation.Error!);
 
             var user = User.CreateOwner(
                 PersonName.Create(dto.FirstName, dto.LastName),
@@ -111,7 +111,7 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
 
-            await TrySendEmail(
+            var emailDispatch = await TrySendCriticalEmail(
                 () => _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
@@ -120,9 +120,14 @@ namespace BOOKLY.Application.Services.UserAggregate
                         (int)EmailConfirmationTtl.TotalHours),
                     ct),
                 "confirmación de email",
-                user.Email.Value);
+                user.Email.Value,
+                "La cuenta se creo correctamente. Revisa tu email para confirmar el acceso antes de iniciar sesion.",
+                "La cuenta se creo, pero no pudimos enviar el email de confirmacion.");
 
-            return Result<UserDto>.Success(_mapper.Map<UserDto>(user));
+            return Result<RegisterOwnerResultDto>.Success(
+                new RegisterOwnerResultDto(
+                    _mapper.Map<UserDto>(user),
+                    emailDispatch));
         }
 
         public async Task<Result> ConfirmEmail(ConfirmEmailDto dto, CancellationToken ct = default)
@@ -148,15 +153,20 @@ namespace BOOKLY.Application.Services.UserAggregate
             return Result.Success();
         }
 
-        public async Task<Result> ResendEmailConfirmation(ResendEmailConfirmationDto dto, CancellationToken ct = default)
+        public async Task<Result<EmailDispatchResultDto>> ResendEmailConfirmation(ResendEmailConfirmationDto dto, CancellationToken ct = default)
         {
             var user = await _userRepository.GetByEmail(dto.Email, ct);
             if (user is null || user.EmailConfirmed || user.Role == UserKind.Admin)
-                return Result.Success();
+            {
+                return Result<EmailDispatchResultDto>.Success(
+                    new EmailDispatchResultDto(
+                        false,
+                        "No encontramos una cuenta pendiente de confirmacion para ese email."));
+            }
 
             var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
 
-            await TrySendEmail(
+            var emailDispatch = await TrySendCriticalEmail(
                 () => _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
@@ -165,9 +175,11 @@ namespace BOOKLY.Application.Services.UserAggregate
                         (int)EmailConfirmationTtl.TotalHours),
                     ct),
                 "reenvío de confirmación de email",
-                user.Email.Value);
+                user.Email.Value,
+                "Te enviamos un nuevo email de confirmacion.",
+                "No pudimos enviar el email de confirmacion.");
 
-            return Result.Success();
+            return Result<EmailDispatchResultDto>.Success(emailDispatch);
         }
 
         public async Task<Result> RequestPasswordReset(RequestPasswordResetDto dto, CancellationToken ct = default)
@@ -510,6 +522,34 @@ namespace BOOKLY.Application.Services.UserAggregate
                     "La operación principal se completó, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
                     purpose,
                     recipientEmail);
+            }
+        }
+
+        private async Task<EmailDispatchResultDto> TrySendCriticalEmail(
+            Func<Task> sendEmail,
+            string purpose,
+            string recipientEmail,
+            string successMessage,
+            string failureMessage)
+        {
+            try
+            {
+                await sendEmail();
+                return new EmailDispatchResultDto(true, successMessage);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "La operación principal se completó, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
+                    purpose,
+                    recipientEmail);
+
+                var message = ex is InvalidOperationException
+                    ? $"{failureMessage} {ex.Message}"
+                    : $"{failureMessage} Revisa la configuracion SMTP de la API e intenta nuevamente.";
+
+                return new EmailDispatchResultDto(false, message);
             }
         }
     }

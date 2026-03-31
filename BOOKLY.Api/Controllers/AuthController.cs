@@ -24,14 +24,14 @@ namespace BOOKLY.Api.Controllers
         }
 
         [HttpPost("register")]
-        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(RegisterOwnerResultDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Register([FromBody] CreateUserDto dto, CancellationToken ct)
         {
             var result = await _userService.RegisterOwner(dto, ct);
             return result.IsSuccess
-                ? CreatedAtAction(nameof(UsersController.GetById), "Users", new { id = result.Data?.Id }, result.Data)
+                ? CreatedAtAction(nameof(UsersController.GetById), "Users", new { id = result.Data?.User.Id }, result.Data)
                 : HandleResult(result);
         }
 
@@ -45,7 +45,7 @@ namespace BOOKLY.Api.Controllers
         }
 
         [HttpPost("resend-confirmation")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(EmailDispatchResultDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResendConfirmation([FromBody] ResendEmailConfirmationDto dto, CancellationToken ct)
         {
             return HandleResult(await _userService.ResendEmailConfirmation(dto, ct));

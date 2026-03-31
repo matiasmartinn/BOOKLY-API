@@ -25,6 +25,11 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
             return new SubscriptionPeriod(start, endInclusive);
         }
 
+        public static SubscriptionPeriod CreateMonthly(DateOnly start)
+        {
+            return Create(start, start.AddMonths(1));
+        }
+
         public static SubscriptionPeriod OpenEnded(DateOnly start)
         {
             return new SubscriptionPeriod(start, null);
