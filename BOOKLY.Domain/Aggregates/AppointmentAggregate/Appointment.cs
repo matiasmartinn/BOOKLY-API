@@ -17,8 +17,9 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
         
         // Time Data
         public DateTime StartDateTime { get; private set; }
-        public Duration Duration { get; private set; } = null!;
         public DateTime EndDateTime { get; private set; }
+        public Duration Duration { get; private set; } = null!;
+        
         //
         public AppointmentStatus Status { get; private set; }
         public string? ClientNotes { get; private set; }
@@ -43,13 +44,14 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
             , DateTime startDateTime
             , Duration duration
             , string? clientNotes
-            
+            , DateTime now
+            , int? actorUserId = null
             )
         {
             if (serviceId <= 0)
                 throw new DomainException("El id tiene que ser un valor válido.");
 
-            if (startDateTime <= DateTime.Now)
+            if (startDateTime <= now)
                 throw new DomainException("El turno debe agendarse en un horario futuro.");
 
             var appointment = new Appointment
@@ -62,16 +64,13 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
                 EndDateTime = startDateTime.Add(TimeSpan.FromMinutes(duration.Value)),
                 Status = AppointmentStatus.Pending,
                 ClientNotes = clientNotes?.Trim(),
-                CreatedOn = DateTime.Now
+                CreatedOn = now
             };
 
             appointment.AddDomainEvent(new AppointmentCreatedEvent(
-                appointment.Id,
-                serviceId,
-                client.ClientName,
-                client.Email.Value,
-                startDateTime,
-                DateTime.Now));
+                appointment,
+                now,
+                actorUserId));
 
             return appointment;
         }
@@ -85,6 +84,8 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
             , AppointmentStatus status
             , string? clientNotes
             , string? InternalNotes
+            , DateTime now
+            , int? actorUserId = null
             )
         {
             if (serviceId <= 0)
@@ -100,16 +101,13 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
                 EndDateTime = startDateTime.Add(TimeSpan.FromMinutes(duration.Value)),
                 Status = status,
                 ClientNotes = clientNotes?.Trim(),
-                CreatedOn = DateTime.Now
+                CreatedOn = now
             };
 
             appointment.AddDomainEvent(new AppointmentCreatedEvent(
-                appointment.Id,
-                serviceId,
-                client.ClientName,
-                client.Email.Value,
-                startDateTime,
-                DateTime.Now));
+                appointment,
+                now,
+                actorUserId));
 
             return appointment;
         }
@@ -121,17 +119,42 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
             _fieldValues.Add(AppointmentFieldValue.Create(fieldDefinitionId, value));
         }
 
-        public void ChangeClientInfo(ClientInfo newClient)
+        public void ChangeClientInfo(ClientInfo newClient, DateTime now)
         {
             if (Client == newClient)
                 return;
 
             Client = newClient;
+            UpdateOn = now;
         }
 
-        public void Cancel(string? reason)
+        public void ChangeClientNotes(string? notes, DateTime now)
         {
-            if (Status == AppointmentStatus.NoShow || Status == AppointmentStatus.Completed)
+            var normalizedNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+            if (ClientNotes == normalizedNotes)
+                return;
+
+            ClientNotes = normalizedNotes;
+            UpdateOn = now;
+        }
+
+        public void Reschedule(DateTime start, Duration duration, DateTime now)
+        {
+            if (Status != AppointmentStatus.Pending)
+                throw new DomainException("Solo los turnos pendientes pueden reprogramarse.");
+
+            if (start <= now)
+                throw new DomainException("El turno debe reprogramarse en un horario futuro.");
+
+            StartDateTime = start;
+            Duration = duration;
+            EndDateTime = start.Add(TimeSpan.FromMinutes(duration.Value));
+            UpdateOn = now;
+        }
+
+        public void MarkAsCancel(string? reason, DateTime now, int? actorUserId = null)
+        {
+            if (Status == AppointmentStatus.NoShow || Status == AppointmentStatus.Attended)
                 throw new DomainException("No pueden cancelarse los turnos completados/ausentes");
 
             if (Status == AppointmentStatus.Cancelled)
@@ -142,57 +165,44 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate
     
             var oldStatus = Status;
             Status = AppointmentStatus.Cancelled;
-            CancelledOn = DateTime.Now;
+            CancelledOn = now;
+            UpdateOn = now;
 
             AddDomainEvent(new AppointmentStatusChangedEvent(
-                Id, oldStatus, AppointmentStatus.Cancelled, reason, DateTime.Now));
+                Id, oldStatus, AppointmentStatus.Cancelled, reason, now, actorUserId));
         }
 
-        public void Confirm()
+        public void MarkAsAttended(DateTime now, int? actorUserId = null)
         {
             if (Status != AppointmentStatus.Pending)
-                throw new DomainException("Solo los turnos pendientes pueden confirmarse.");
+                throw new DomainException("Solo los turnos pendientes pueden completarse.");
 
-            var oldStatus = Status;
-            Status = AppointmentStatus.Confirmed;
-
-            AddDomainEvent(new AppointmentStatusChangedEvent(
-                Id, oldStatus, AppointmentStatus.Confirmed, null, DateTime.Now));
-        }
-
-        public void MarkAsCompleted()
-        {
-            if (Status != AppointmentStatus.Confirmed)
-                throw new DomainException("Solo los turnos confirmados pueden completarse.");
-
-            if (StartDateTime >= DateTime.Now)
+            if (StartDateTime >= now)
                 throw new DomainException("El turno debe haber iniciado.");
 
             var oldStatus = Status;
-            Status = AppointmentStatus.Completed;
+            Status = AppointmentStatus.Attended;
+            UpdateOn = now;
 
             AddDomainEvent(new AppointmentStatusChangedEvent(
-                Id, oldStatus, AppointmentStatus.Completed, null, DateTime.Now));
+                Id, oldStatus, AppointmentStatus.Attended, null, now, actorUserId));
         }
 
-        public void MarkAsNoShow()
+        public void MarkAsNoShow(DateTime now, int? actorUserId = null)
         {
-            if (Status != AppointmentStatus.Confirmed)
-                throw new DomainException("Solo en los turnos confirmados pueden marcarse como ausentes.");
+            if (Status != AppointmentStatus.Pending)
+                throw new DomainException("Solo los turnos pendientes pueden marcarse como ausentes.");
 
-            if (StartDateTime >= DateTime.Now)
+            if (StartDateTime >= now)
                 throw new DomainException("El turno debe haber iniciado.");
 
             var oldStatus = Status;
             Status = AppointmentStatus.NoShow;
+            UpdateOn = now;
 
             AddDomainEvent(new AppointmentStatusChangedEvent(
-                Id, oldStatus, AppointmentStatus.NoShow, null, DateTime.Now));
+                Id, oldStatus, AppointmentStatus.NoShow, null, now, actorUserId));
         }
 
-        public void ChangeInternalNotes(string notes)
-        {
-            CancelReason = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
-        }
     }    
 }

@@ -13,7 +13,7 @@
         public int DurationMinutes { get; init; }
         public string Status { get; init; } = null!;
         public string? ClientNotes { get; init; }
-        public string? InternalNotes { get; init; }
+        public string? CancelReason { get; init; }
         public DateTime CreatedOn { get; init; }
         public List<AppointmentFieldValueDto> FieldValues { get; init; } = [];
     }

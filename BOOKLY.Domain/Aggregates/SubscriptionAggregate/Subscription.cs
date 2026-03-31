@@ -11,16 +11,16 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
         public SubscriptionPeriod Period { get; private set; } = null!;
         public SubscriptionPlan Plan { get; private set; } = null!;
         public DateTime CreatedOn { get; private set; }
-        public DateTime? UpdateOn { get; private set; }
+        public DateTime? UpdatedOn { get; private set; }
 
         private Subscription() { }
 
-        public static Subscription CreateFree(int ownerId)
+        public static Subscription CreateFree(int ownerId, DateTime now)
         {
             if (ownerId <= 0)
                 throw new DomainException("El owner es requerido");
 
-            var startDate = DateOnly.FromDateTime(DateTime.Now);
+            var startDate = DateOnly.FromDateTime(now);
 
             return new Subscription
             {
@@ -28,11 +28,11 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
                 Plan = SubscriptionPlan.Free(),
                 Status = SubscriptionStatus.Active,
                 Period = SubscriptionPeriod.OpenEnded(startDate),
-                CreatedOn = DateTime.Now,
+                CreatedOn = now,
             };
         }
 
-        public static Subscription CreatePaid(int ownerId, SubscriptionPlan plan, SubscriptionPeriod period)
+        public static Subscription CreatePaid(int ownerId, SubscriptionPlan plan, SubscriptionPeriod period, DateTime now)
         {
             if (ownerId <= 0)
                 throw new DomainException("El owner es requerido");
@@ -55,7 +55,7 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
                 Plan = plan,
                 Status = SubscriptionStatus.Active,
                 Period = period,
-                CreatedOn = DateTime.Now,
+                CreatedOn = now,
             };
         }
 
@@ -86,7 +86,7 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
         /// - Sigue activa hasta EndDate.
         /// - Free no se cancela.
         /// </summary>
-        public void Cancel()
+        public void Cancel(DateTime now)
         {
             if (Plan.Name == PlanName.Free)
                 throw new DomainException("El plan Free no puede cancelarse.");
@@ -95,13 +95,14 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
                 return;
 
             Status = SubscriptionStatus.Cancelled;
+            UpdatedOn = now;
         }
 
         /// <summary>
         /// Renovación MANUAL (simulada): el Owner paga/renueva por fuera,
         /// y el sistema actualiza el periodo. También reactiva la suscripción.
         /// </summary>
-        public void Renew(SubscriptionPeriod newPeriod)
+        public void Renew(SubscriptionPeriod newPeriod, DateTime now)
         {
             if (Plan.Name == PlanName.Free)
                 throw new DomainException("El plan Free no requiere renovación.");
@@ -114,30 +115,41 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
 
             Period = newPeriod;
             Status = SubscriptionStatus.Active;
+            UpdatedOn = now;
         }
 
-        public void UpgradeTo(SubscriptionPlan newPlan)
+        public void UpgradeTo(SubscriptionPlan newPlan, DateTime now)
         {
             if (newPlan is null)
                 throw new DomainException("El nuevo plan es requerido.");
 
+            if (newPlan.Name == PlanName.Free)
+                throw new DomainException("Use ChangeToFree para pasar al plan Free.");
+
             if (newPlan.Name == Plan.Name)
                 return;
+
+            if (Plan.Name == PlanName.Free)
+                throw new DomainException("Para pasar de Free a un plan pago debe definir un período.");
 
             if (newPlan.Name < Plan.Name)
                 throw new DomainException("El upgrade debe ser hacia un plan superior.");
 
             Plan = newPlan;
+            UpdatedOn = now;
         }
 
         /// <summary>
         /// Downgrade requiere validar que NO exceda límites del nuevo plan.
         /// Los conteos llegan desde la capa de aplicación (query).
         /// </summary>
-        public void DowngradeTo(SubscriptionPlan newPlan, int currentServices, int currentSecretaries)
+        public void DowngradeTo(SubscriptionPlan newPlan, int currentServices, int currentSecretaries, DateTime now)
         {
             if (newPlan is null)
                 throw new DomainException("El nuevo plan es requerido.");
+
+            if (newPlan.Name == PlanName.Free)
+                throw new DomainException("Use ChangeToFree para pasar al plan Free.");
 
             if (newPlan.Name == Plan.Name)
                 return;
@@ -152,6 +164,46 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
                 throw new DomainException("No se puede bajar de plan: excede el límite de secretarios.");
 
             Plan = newPlan;
+            UpdatedOn = now;
+        }
+
+        public void ChangeToFree(DateOnly startDate, int currentServices, int currentSecretaries, DateTime now)
+        {
+            var freePlan = SubscriptionPlan.Free();
+
+            if (!freePlan.AllowsServices(currentServices))
+                throw new DomainException("No se puede bajar de plan: excede el límite de servicios.");
+
+            if (!freePlan.AllowsSecretaries(currentSecretaries))
+                throw new DomainException("No se puede bajar de plan: excede el límite de secretarios.");
+
+            Plan = freePlan;
+            Period = SubscriptionPeriod.OpenEnded(startDate);
+            Status = SubscriptionStatus.Active;
+            UpdatedOn = now;
+        }
+
+        public void SwitchFromFreeToPaid(SubscriptionPlan newPlan, SubscriptionPeriod newPeriod, DateTime now)
+        {
+            if (newPlan is null)
+                throw new DomainException("El nuevo plan es requerido.");
+
+            if (Plan.Name != PlanName.Free)
+                throw new DomainException("La suscripción actual no es Free.");
+
+            if (newPlan.Name == PlanName.Free)
+                throw new DomainException("Use ChangeToFree para el plan Free.");
+
+            if (newPeriod is null)
+                throw new DomainException("El período es requerido.");
+
+            if (newPeriod.IsOpenEnded)
+                throw new DomainException("Un plan pago debe tener EndDate.");
+
+            Plan = newPlan;
+            Period = newPeriod;
+            Status = SubscriptionStatus.Active;
+            UpdatedOn = now;
         }
         public void EnsureCanCreateService(int currentServices)
         {
@@ -163,6 +215,12 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
         {
             if (!Plan.AllowsSecretaries(currentSecretaries + 1))
                 throw new DomainException("El plan actual no permite agregar más secretarios.");
+        }
+
+        public void EnsureCanUseExtraFields()
+        {
+            if (!Plan.AllowsExtraFields())
+                throw new DomainException("El plan actual no permite utilizar campos extra.");
         }
     }
 }

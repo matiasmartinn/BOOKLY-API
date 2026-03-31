@@ -1,4 +1,4 @@
-﻿using BOOKLY.Domain.SharedKernel;
+using BOOKLY.Domain.SharedKernel;
 
 namespace BOOKLY.Domain.Aggregates.AppointmentAggregate.Events
 {
@@ -7,6 +7,7 @@ namespace BOOKLY.Domain.Aggregates.AppointmentAggregate.Events
         AppointmentStatus OldStatus,
         AppointmentStatus NewStatus,
         string? Reason,
-        DateTime OccurredOn
+        DateTime OccurredOn,
+        int? UserId
         ) : IDomainEvent;
 }

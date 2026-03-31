@@ -49,6 +49,10 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("is_active")
                    .HasDefaultValue(true);
 
+            builder.Property(x => x.EmailConfirmed)
+                   .HasColumnName("email_confirmed")
+                   .HasDefaultValue(false);
+
             builder.Property(x => x.CreatedAt)
                    .HasColumnName("created_at")
                    .HasDefaultValueSql("GETDATE()")
@@ -74,6 +78,9 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.HasIndex(x => x.IsActive)
                    .HasDatabaseName("ix_users_is_active");
+
+            builder.HasIndex(x => x.EmailConfirmed)
+                   .HasDatabaseName("ix_users_email_confirmed");
 
             builder.HasIndex(x => x.CreatedAt)
                    .HasDatabaseName("ix_users_created_at");

@@ -147,9 +147,16 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("reason");
 
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AppointmentId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_appointment_status_history_user_id");
 
                     b.ToTable("appointment_status_history", (string)null);
                 });
@@ -413,7 +420,7 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("status");
 
-                    b.Property<DateTime?>("UpdateOn")
+                    b.Property<DateTime?>("UpdatedOn")
                         .HasColumnType("datetime2")
                         .HasColumnName("updated_on");
 
@@ -446,6 +453,12 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("GETDATE()");
 
+                    b.Property<bool>("EmailConfirmed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("email_confirmed");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -467,6 +480,9 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_users_created_at");
 
+                    b.HasIndex("EmailConfirmed")
+                        .HasDatabaseName("ix_users_email_confirmed");
+
                     b.HasIndex("IsActive")
                         .HasDatabaseName("ix_users_is_active");
 
@@ -476,12 +492,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.UserInvitation", b =>
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.UserToken", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasColumnName("user_invitation_id");
+                        .HasColumnName("user_token_id");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
@@ -492,6 +508,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiresOn")
                         .HasColumnType("datetime2")
                         .HasColumnName("expires_on");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("purpose");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -510,19 +532,22 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiresOn")
-                        .HasDatabaseName("ix_user_invitations_expires_on");
+                        .HasDatabaseName("ix_user_tokens_expires_on");
 
                     b.HasIndex("TokenHash")
                         .IsUnique()
-                        .HasDatabaseName("ix_user_invitations_token_hash");
+                        .HasDatabaseName("ix_user_tokens_token_hash");
 
                     b.HasIndex("UsedOn")
-                        .HasDatabaseName("ix_user_invitations_used_on");
+                        .HasDatabaseName("ix_user_tokens_used_on");
 
                     b.HasIndex("UserId")
-                        .HasDatabaseName("ix_user_invitations_user_id");
+                        .HasDatabaseName("ix_user_tokens_user_id");
 
-                    b.ToTable("user_invitations", (string)null);
+                    b.HasIndex("UserId", "Purpose")
+                        .HasDatabaseName("ix_user_tokens_user_id_purpose");
+
+                    b.ToTable("user_tokens", (string)null);
                 });
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.AppointmentAggregate.Appointment", b =>
@@ -620,6 +645,13 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasForeignKey("AppointmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceSecretary", b =>
@@ -639,6 +671,23 @@ namespace BOOKLY.Infrastructure.Migrations
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.ServiceAggregate.Service", b =>
                 {
+                    b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Capacity", "Capacity", b1 =>
+                        {
+                            b1.Property<int>("ServiceId")
+                                .HasColumnType("int");
+
+                            b1.Property<int>("Value")
+                                .HasColumnType("int")
+                                .HasColumnName("capacity");
+
+                            b1.HasKey("ServiceId");
+
+                            b1.ToTable("services");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ServiceId");
+                        });
+
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Duration", "DurationMinutes", b1 =>
                         {
                             b1.Property<int>("ServiceId")
@@ -647,6 +696,34 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.Property<int>("Value")
                                 .HasColumnType("int")
                                 .HasColumnName("duration_minutes");
+
+                            b1.HasKey("ServiceId");
+
+                            b1.ToTable("services");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ServiceId");
+                        });
+
+                    b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Location", "Location", b1 =>
+                        {
+                            b1.Property<int>("ServiceId")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("Address")
+                                .HasMaxLength(250)
+                                .HasColumnType("nvarchar(250)")
+                                .HasColumnName("address");
+
+                            b1.Property<string>("GoogleMapsUrl")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("google_maps_url");
+
+                            b1.Property<string>("PlaceName")
+                                .HasMaxLength(150)
+                                .HasColumnType("nvarchar(150)")
+                                .HasColumnName("place_name");
 
                             b1.HasKey("ServiceId");
 
@@ -701,6 +778,23 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("service_id");
 
+                            b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Capacity", "Capacity", b2 =>
+                                {
+                                    b2.Property<int>("ServiceScheduleId")
+                                        .HasColumnType("int");
+
+                                    b2.Property<int>("Value")
+                                        .HasColumnType("int")
+                                        .HasColumnName("capacity");
+
+                                    b2.HasKey("ServiceScheduleId");
+
+                                    b2.ToTable("service_schedules");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ServiceScheduleId");
+                                });
+
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.TimeRange", "Range", b2 =>
                                 {
                                     b2.Property<int>("ServiceScheduleId")
@@ -713,23 +807,6 @@ namespace BOOKLY.Infrastructure.Migrations
                                     b2.Property<TimeOnly>("Start")
                                         .HasColumnType("time")
                                         .HasColumnName("start_time");
-
-                                    b2.HasKey("ServiceScheduleId");
-
-                                    b2.ToTable("service_schedules");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ServiceScheduleId");
-                                });
-
-                            b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Capacity", "Capacity", b2 =>
-                                {
-                                    b2.Property<int>("ServiceScheduleId")
-                                        .HasColumnType("int");
-
-                                    b2.Property<int>("Value")
-                                        .HasColumnType("int")
-                                        .HasColumnName("capacity");
 
                                     b2.HasKey("ServiceScheduleId");
 
@@ -841,8 +918,13 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.Navigation("TimeRange");
                         });
 
+                    b.Navigation("Capacity")
+                        .IsRequired();
+
                     b.Navigation("DurationMinutes")
                         .IsRequired();
+
+                    b.Navigation("Location");
 
                     b.Navigation("ServiceSchedules");
 
@@ -1047,7 +1129,7 @@ namespace BOOKLY.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.UserInvitation", b =>
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.UserToken", b =>
                 {
                     b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", null)
                         .WithMany()

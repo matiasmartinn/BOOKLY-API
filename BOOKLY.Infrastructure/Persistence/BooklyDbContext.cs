@@ -31,21 +31,54 @@ namespace BOOKLY.Infrastructure.Persistence
         public DbSet<ServiceTypeFieldDefinition> ServiceTypeFieldDefinitions => Set<ServiceTypeFieldDefinition>();
         public DbSet<ServiceTypeFieldOption> ServiceTypeFieldOptions => Set<ServiceTypeFieldOption>();
         public DbSet<AppointmentStatusHistory> AppointmentStatusHistories => Set<AppointmentStatusHistory>();
+        public DbSet<UserToken> UserTokens => Set<UserToken>();
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            //  Capturar aggregates ANTES de guardar (después el ChangeTracker puede no tenerlos)
             var aggregates = ChangeTracker
                 .Entries<AggregateRoot>()
                 .Where(e => e.Entity.DomainEvents.Any())
                 .Select(e => e.Entity)
                 .ToList();
 
-            int result;
-
+            await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                result = await base.SaveChangesAsync(cancellationToken);
+                var result = await SaveWithConflictHandlingAsync(cancellationToken);
+
+                if (aggregates.Count > 0)
+                {
+                    foreach (var aggregate in aggregates)
+                    {
+                        await _dispatcher.Dispatch(aggregate.DomainEvents, cancellationToken);
+                    }
+
+                    foreach (var aggregate in aggregates)
+                    {
+                        aggregate.ClearDomainEvents();
+                    }
+
+                    if (ChangeTracker.HasChanges())
+                    {
+                        await SaveWithConflictHandlingAsync(cancellationToken);
+                    }
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        private async Task<int> SaveWithConflictHandlingAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await base.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx)
             {
@@ -56,14 +89,6 @@ namespace BOOKLY.Infrastructure.Persistence
                     _ => new ConflictException($"Error de base de datos ({sqlEx.Number}).")
                 };
             }
-
-            foreach (var aggregate in aggregates)
-            {
-                await _dispatcher.Dispatch(aggregate.DomainEvents, cancellationToken);
-                aggregate.ClearDomainEvents();
-            }
-
-            return result;
         }
         public Task<int> SaveChanges(CancellationToken cancellationToken = default)
             => SaveChangesAsync(cancellationToken);

@@ -15,6 +15,7 @@ namespace BOOKLY.Application.Mappings
                .ForMember(d => d.LastName, o => o.MapFrom(s => s.PersonName.LastName))
                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role))
                .ForMember(d => d.IsActive, o => o.MapFrom(s => s.IsActive))
+               .ForMember(d => d.EmailConfirmed, o => o.MapFrom(s => s.EmailConfirmed))
                .ForMember(d => d.CreatedAt, o => o.MapFrom(s => s.CreatedAt))
                .ForMember(d => d.LastLoginAt, o => o.MapFrom(s => s.LastLoginAt));
         }

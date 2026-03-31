@@ -2,10 +2,10 @@
 
 namespace BOOKLY.Domain.Interfaces
 {
-    public interface IUserInvitationRepository
+    public interface IUserTokenRepository
     {
-        Task AddOne(UserInvitation userInvitation, CancellationToken ct = default);
-        Task<UserInvitation?> GetByTokenHash(string tokenHash, CancellationToken ct = default);
-        void Update(UserInvitation invitation);
+        Task AddOne(UserToken userToken, CancellationToken ct = default);
+        Task<UserToken?> GetByTokenHash(string tokenHash, CancellationToken ct = default);
+        void Update(UserToken token);
     }
 }

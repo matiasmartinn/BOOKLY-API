@@ -11,7 +11,7 @@ public sealed class Security
     public static Security Create() => new();
 
     // El Owner asigna un Secretary a un Service con permisos base
-    public ServiceMembership AddSecretary(int secretaryId, int serviceId)
+    public ServiceMembership AddSecretary(int secretaryId, int serviceId, DateTime now)
     {
         if (_memberships.Any(m => m.SecretaryId == secretaryId
                                && m.ServiceId == serviceId))
@@ -19,7 +19,7 @@ public sealed class Security
                 "El secretario ya está asignado a este servicio.");
 
         var membership = ServiceMembership.CreateWithDefaultPermissions(
-            secretaryId, serviceId);
+            secretaryId, serviceId, now);
 
         _memberships.Add(membership);
         return membership;

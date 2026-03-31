@@ -1,6 +1,5 @@
 ﻿using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Interfaces;
-using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +17,6 @@ namespace BOOKLY.Infrastructure.Repositories
         public async Task<User?> GetByEmail(string email, CancellationToken ct = default)
         {
             return await dbContext.Users
-                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Email.Value == email, ct);
         }
     }

@@ -1,5 +1,5 @@
-﻿// BOOKLY.Infrastructure/Persistence/Configurations/SubscriptionRepository.cs
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+﻿using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Repositories;
 using BOOKLY.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

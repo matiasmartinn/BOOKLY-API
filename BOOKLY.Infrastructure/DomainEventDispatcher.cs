@@ -9,6 +9,7 @@ namespace BOOKLY.Infrastructure
     /// todos los handlers registrados para cada evento de dominio,
     /// permitiendo ejecutar lógica desacoplada cuando
     /// ocurren cambios relevantes en el dominio.
+    /// </summary>
     public class DomainEventDispatcher : IDomainEventDispatcher
     {
         private readonly IServiceProvider _provider;

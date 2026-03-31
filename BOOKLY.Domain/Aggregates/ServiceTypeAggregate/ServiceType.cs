@@ -47,12 +47,15 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
         public void Deactivate() => IsActive = false;
         public void Activate() => IsActive = true;
 
+        public bool HasActiveFields()
+            => _fieldDefinitions.Any(field => field.IsActive);
+
         // ========================
         // Field behavior
         // ========================
         public ServiceTypeFieldDefinition AddField(
             string key, string label, ServiceFieldType type,
-            bool isRequired, int sortOrder, string? description = null)
+            bool isRequired, int sortOrder, DateTime now, string? description = null)
         {
             var fk = FieldKey.Create(key);       // VO creado acá, validación incluida
             var fl = FieldLabel.Create(label);
@@ -60,7 +63,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
             if (_fieldDefinitions.Any(f => f.Key.Value.Equals(fk.Value, StringComparison.OrdinalIgnoreCase)))
                 throw new DomainException("Ya existe un campo con esa key para este tipo de servicio.");
 
-            var def = ServiceTypeFieldDefinition.Create(Id, fk, fl, type, isRequired, sortOrder, description);
+            var def = ServiceTypeFieldDefinition.Create(Id, fk, fl, type, isRequired, sortOrder, description, now);
             _fieldDefinitions.Add(def);
             return def;
         }
@@ -96,10 +99,10 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
         // ========================
         // Option behavior
         // ========================
-        public void AddOptionToField(int fieldDefinitionId, string value, string label, int sortOrder)
+        public void AddOptionToField(int fieldDefinitionId, string value, string label, int sortOrder, DateTime now)
         {
             var def = GetFieldOrThrow(fieldDefinitionId);
-            def.AddOption(value, label, sortOrder);
+            def.AddOption(value, label, sortOrder, now);
         }
 
         public void RemoveOptionFromField(int fieldDefinitionId, int optionId)
@@ -108,22 +111,22 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
             def.RemoveOption(optionId);
         }
 
-        public void DeactivateOption(int fieldDefinitionId, int optionId)
+        public void DeactivateOption(int fieldDefinitionId, int optionId, DateTime now)
         {
             var def = GetFieldOrThrow(fieldDefinitionId);
-            def.DeactivateOption(optionId);
+            def.DeactivateOption(optionId, now);
         }
 
-        public void ActivateOption(int fieldDefinitionId, int optionId)
+        public void ActivateOption(int fieldDefinitionId, int optionId, DateTime now)
         {
             var def = GetFieldOrThrow(fieldDefinitionId);
-            def.ActivateOption(optionId);
+            def.ActivateOption(optionId, now);
         }
 
-        public void UpdateOption(int fieldDefinitionId, int optionId, string? label, int? sortOrder)
+        public void UpdateOption(int fieldDefinitionId, int optionId, string? label, int? sortOrder, DateTime now)
         {
             var def = GetFieldOrThrow(fieldDefinitionId);
-            def.UpdateOption(optionId, label, sortOrder);
+            def.UpdateOption(optionId, label, sortOrder, now);
         }
 
         // ========================

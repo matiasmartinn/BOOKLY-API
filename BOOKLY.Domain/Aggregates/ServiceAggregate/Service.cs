@@ -1,5 +1,7 @@
-﻿using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+﻿using System.Net;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.SharedKernel;
 
@@ -18,8 +20,10 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public int OwnerId { get; private set; }
         public Slug Slug { get; private set; } = null!;
         public string? Description { get; private set; }
+        public Location? Location { get; private set; }
         public int ServiceTypeId { get; private set; }
         public Duration DurationMinutes { get; private set; } = null!;
+        public Capacity Capacity { get; private set; } = null!;
         public Mode Mode { get; private set; }
         public bool IsActive { get; private set; }
         public decimal? Price { get; private set; }
@@ -40,8 +44,10 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             int userId,
             string slug,
             string? description,
+            Location? location,
             int serviceType,
             Duration duration,
+            Capacity capacity,
             Mode mode,
             decimal? price)
         {
@@ -56,8 +62,10 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 OwnerId = userId,
                 Slug = Slug.Create(slug),
                 Description = description?.Trim(),
+                Location = location,
                 ServiceTypeId = serviceType,
                 DurationMinutes = duration,
+                Capacity = capacity,
                 Mode = mode,
                 Price = price,
                 IsActive = true
@@ -77,6 +85,11 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             Description = description.Trim();
         }
 
+        public void ChangeLocation(string? placeName, string? address, string? googleMapsUrl)
+        {
+            Location = Location.Create(placeName, address, googleMapsUrl);
+        }
+
         public void ChangeSlug(string slug)
         {
             var newSlug = Slug.Create(slug);
@@ -88,6 +101,11 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         {
             var newDuration = Duration.Create(duration);
             DurationMinutes = newDuration;
+        }
+
+        public void ChangeCapacity(int capacity)
+        {
+            Capacity = ValueObjects.Capacity.Create(capacity);
         }
 
         public void ChangePrice(decimal price)
@@ -156,10 +174,10 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 throw new DomainException("Debe proporcionar al menos un horario");
 
             // Validar que horarios no se solapan
-            ValidateNoOverlappingSchedules(schedules);
+            ValidateNoOverlappingSchedules(schedulesList);
 
             _serviceSchedules.Clear();
-            _serviceSchedules.AddRange(schedules);
+            _serviceSchedules.AddRange(schedulesList);
         }
         private void ValidateNoOverlappingSchedules(IEnumerable<ServiceSchedule> schedules)
         {
@@ -179,6 +197,13 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                         throw new DomainException($"Existen horarios solapados para el día {dayGroup.Key}.");
                 }
             }
+        }
+
+        public ServiceSchedule? GetScheduleFor(DateTime startDateTime, Duration duration)
+        {
+            return _serviceSchedules
+                .OrderBy(s => s.Range.Start)
+                .FirstOrDefault(s => s.CanHost(startDateTime, duration));
         }
 
 

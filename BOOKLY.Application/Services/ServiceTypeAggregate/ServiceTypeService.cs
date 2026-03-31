@@ -13,15 +13,18 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
     public sealed class ServiceTypeService : IServiceTypeService
     {
         private readonly IServiceTypeRepository _serviceTypeRepository;
+        private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
         public ServiceTypeService(
             IServiceTypeRepository serviceTypeRepository,
+            IDateTimeProvider dateTimeProvider,
             IMapper mapper,
             IUnitOfWork unitOfWork
             )
         {
             _serviceTypeRepository = serviceTypeRepository;
+            _dateTimeProvider = dateTimeProvider;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
         }
@@ -111,6 +114,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
                 (ServiceFieldType)dto.FieldType,
                 dto.IsRequired,
                 dto.SortOrder,
+                _dateTimeProvider.UtcNow(),
                 dto.Description);
 
             _serviceTypeRepository.Update(serviceType);
@@ -180,7 +184,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder);
+            serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -193,7 +197,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder);
+            serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -219,7 +223,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.DeactivateOption(fieldId, optionId);
+            serviceType.DeactivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -232,7 +236,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.ActivateOption(fieldId, optionId);
+            serviceType.ActivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 

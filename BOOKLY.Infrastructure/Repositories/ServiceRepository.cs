@@ -24,6 +24,14 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
+        public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .AsSplitQuery()
+                .Include(s => s.ServiceSecretaries)
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
+        }
+
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default)
         {
             var date = DateOnly.FromDateTime(startDateTime);
@@ -50,7 +58,7 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
-        public async Task<IEnumerable<ServiceSchedule?>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
+        public async Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
         {
             return await dbContext.Services
                 .Where(s => s.Id == serviceId)
@@ -59,7 +67,7 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .ToListAsync(ct);
         }
 
-        public async Task<IEnumerable<ServiceUnavailability?>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default)
+        public async Task<List<ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default)
         {
             return await dbContext.Services
                 .Where(s => s.Id == serviceId)
@@ -67,12 +75,22 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .ToListAsync(ct);
         }
-        public async Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default)
+
+        public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default)
         {
-            return await dbContext.Services
+            return dbContext.Services
                 .AsNoTracking()
-                .Where(s => s.OwnerId == ownerId)
-                .CountAsync(ct);
+                .AnyAsync(s =>
+                    s.Slug.Value == slug &&
+                    (!excludedServiceId.HasValue || s.Id != excludedServiceId.Value),
+                    ct);
+        }
+
+        public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .AsNoTracking()
+                .CountAsync(s => s.OwnerId == ownerId, ct);
         }
 
         public async Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default)
@@ -93,5 +111,15 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .ToListAsync(ct);
         }
+
+        public Task<List<Service>> GetServicesByOwnerWithSecretaries(int ownerId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .Where(s => s.OwnerId == ownerId)
+                .Include(s => s.ServiceSecretaries)
+                .AsNoTracking()
+                .ToListAsync(ct);
+        }
+
     }
 }

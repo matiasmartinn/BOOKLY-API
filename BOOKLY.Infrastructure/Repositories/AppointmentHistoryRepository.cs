@@ -1,4 +1,4 @@
-﻿// BOOKLY.Infrastructure/Persistence/Configurations/AppointmentHistoryRepository.cs
+// BOOKLY.Infrastructure/Persistence/Configurations/AppointmentHistoryRepository.cs
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Infrastructure.Persistence;
@@ -13,6 +13,7 @@ namespace BOOKLY.Infrastructure.Repositories
         public async Task<List<AppointmentStatusHistory>> GetByAppointment(int appointmentId, CancellationToken ct = default)
         {
             return await dbContext.AppointmentStatusHistories
+                .Include(h => h.User)
                 .Where(h => h.AppointmentId == appointmentId)
                 .OrderBy(h => h.OccurredOn)
                 .AsNoTracking()
@@ -22,6 +23,7 @@ namespace BOOKLY.Infrastructure.Repositories
         public async Task<List<AppointmentStatusHistory>> GetByService(int serviceId, CancellationToken ct = default)
         {
             return await dbContext.AppointmentStatusHistories
+                .Include(h => h.User)
                 .Where(h => dbContext.Appointments
                     .Where(a => a.ServiceId == serviceId)
                     .Select(a => a.Id)

@@ -20,7 +20,7 @@ public sealed class ServiceMembership
 
     // Por defecto el Secretary entra sin permisos — el Owner los activa
     internal static ServiceMembership CreateWithDefaultPermissions(
-        int secretaryId, int serviceId)
+        int secretaryId, int serviceId, DateTime now)
     {
         if (secretaryId <= 0) throw new DomainException("SecretaryId inválido.");
         if (serviceId <= 0) throw new DomainException("ServiceId inválido.");
@@ -29,7 +29,7 @@ public sealed class ServiceMembership
         {
             SecretaryId = secretaryId,
             ServiceId = serviceId,
-            AssignedAt = DateTime.UtcNow
+            AssignedAt = now
         };
     }
 

@@ -29,6 +29,27 @@
             return new SubscriptionPlan(PlanName.Max, 5, 3);
         }
 
+        public static IReadOnlyList<SubscriptionPlan> GetCatalog()
+        {
+            return
+            [
+                Free(),
+                Pro(),
+                Max()
+            ];
+        }
+
+        public static SubscriptionPlan FromName(PlanName planName)
+        {
+            return planName switch
+            {
+                PlanName.Free => Free(),
+                PlanName.Pro => Pro(),
+                PlanName.Max => Max(),
+                _ => throw new Domain.Exceptions.DomainException("Plan inválido.")
+            };
+        }
+
         public bool AllowsServices(int currentServices)
         {
             if(currentServices < 0) 
@@ -43,6 +64,11 @@
                 return false;
 
             return currentSecretaries <= MaxSecretaries;
+        }
+
+        public bool AllowsExtraFields()
+        {
+            return Name >= PlanName.Pro;
         }
     }
 }

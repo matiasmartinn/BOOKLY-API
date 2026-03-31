@@ -35,7 +35,8 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
             ServiceFieldType fieldType,
             bool isRequired,
             int sortOrder,
-            string? description)
+            string? description,
+            DateTime now)
         {
             if (serviceTypeId <= 0)
                 throw new DomainException("El ServiceTypeId es requerido.");
@@ -53,7 +54,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
                 SortOrder = sortOrder,
                 Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
                 IsActive = true,
-                CreatedOn = DateTime.Now
+                CreatedOn = now
             };
         }
 
@@ -112,7 +113,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
             IsActive = true;
         }
 
-        public void AddOption(string value, string label, int sortOrder)
+        public void AddOption(string value, string label, int sortOrder, DateTime now)
         {
             EnsureSelect();
 
@@ -122,7 +123,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
             if (_options.Any(o => o.Value.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase)))
                 throw new DomainException("Ya existe una opción con ese value.");
 
-            _options.Add(ServiceTypeFieldOption.Create(Id, value, label, sortOrder));
+            _options.Add(ServiceTypeFieldOption.Create(Id, value, label, sortOrder, now));
 
         }
 
@@ -137,27 +138,27 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
             _options.Remove(opt);
         }
 
-        internal void UpdateOption(int optionId, string? label, int? sortOrder)
+        internal void UpdateOption(int optionId, string? label, int? sortOrder, DateTime now)
         {
             EnsureSelect();
             var opt = GetOptionOrThrow(optionId);
-            if (label != null) opt.ChangeLabel(label);
-            if (sortOrder.HasValue) opt.ChangeSortOrder(sortOrder.Value);
-            UpdatedOn = DateTime.UtcNow;
+            if (label != null) opt.ChangeLabel(label, now);
+            if (sortOrder.HasValue) opt.ChangeSortOrder(sortOrder.Value, now);
+            UpdatedOn = now;
         }
 
-        internal void DeactivateOption(int optionId)
+        internal void DeactivateOption(int optionId, DateTime now)
         {
             EnsureSelect();
             var opt = GetOptionOrThrow(optionId);
-            opt.Deactivate();
+            opt.Deactivate(now);
         }
 
-        internal void ActivateOption(int optionId)
+        internal void ActivateOption(int optionId, DateTime now)
         {
             EnsureSelect();
             var opt = GetOptionOrThrow(optionId);
-            opt.Activate();
+            opt.Activate(now);
         }
 
         private ServiceTypeFieldOption GetOptionOrThrow(int optionId)

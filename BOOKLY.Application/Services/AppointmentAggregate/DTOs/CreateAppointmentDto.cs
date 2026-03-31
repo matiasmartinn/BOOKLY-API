@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace BOOKLY.Application.Services.AppointmentAggregate.DTOs
 {
@@ -6,6 +6,8 @@ namespace BOOKLY.Application.Services.AppointmentAggregate.DTOs
     {
         [Required]
         public int ServiceId { get; init; }
+
+        public int? UserId { get; init; }
 
         public int? AssignedSecretaryId { get; init; }
 
@@ -18,8 +20,9 @@ namespace BOOKLY.Application.Services.AppointmentAggregate.DTOs
         public string ClientPhone { get; init; } = null!;
 
         [EmailAddress]
+        [Required]
         [MaxLength(255)]
-        public string ClientEmail { get; init; }
+        public string ClientEmail { get; init; } = null!;
 
         [Required]
         public DateTime StartDateTime { get; init; }

@@ -14,6 +14,10 @@ namespace BOOKLY.Application.Mappings
             CreateMap<Service, ServiceDto>()
                 .ForMember(d => d.Slug, o => o.MapFrom(s => s.Slug.Value))
                 .ForMember(d => d.DurationMinutes, o => o.MapFrom(s => s.DurationMinutes.Value))
+                .ForMember(d => d.Capacity, o => o.MapFrom(s => s.Capacity.Value))
+                .ForMember(d => d.PlaceName, o => o.MapFrom(s => s.Location != null ? s.Location.PlaceName : null))
+                .ForMember(d => d.Address, o => o.MapFrom(s => s.Location != null ? s.Location.Address : null))
+                .ForMember(d => d.GoogleMapsUrl, o => o.MapFrom(s => s.Location != null ? s.Location.GoogleMapsUrl : null))
                 .ForMember(d => d.Mode, o => o.MapFrom(s => s.Mode.ToString()))
                 .ForMember(d => d.Schedules, o => o.MapFrom(s => s.ServiceSchedules));
 
@@ -32,14 +36,6 @@ namespace BOOKLY.Application.Mappings
                 .ForMember(d => d.EndDate, o => o.MapFrom(s => s.DateRange.End))
                 .ForMember(d => d.StartTime, o => o.MapFrom(s => s.TimeRange != null ? s.TimeRange.Start : (TimeOnly?)null))
                 .ForMember(d => d.EndTime, o => o.MapFrom(s => s.TimeRange != null ? s.TimeRange.End : (TimeOnly?)null));
-
-            // CreateServiceScheduleDto → ServiceSchedule
-            CreateMap<CreateServiceScheduleDto, ServiceSchedule>()
-                .ConstructUsing(dto => ServiceSchedule.Create(
-                    TimeRange.Create(dto.StartTime, dto.EndTime),
-                    Capacity.Create(dto.Capacity),
-                    Day.Create(dto.Day)
-                ));
         }
         private static string GetDayName(int dayValue) => dayValue switch
         {

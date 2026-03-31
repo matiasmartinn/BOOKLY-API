@@ -29,6 +29,23 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("description")
                    .HasMaxLength(500);
 
+            builder.OwnsOne(x => x.Location, location =>
+            {
+                location.Property(x => x.PlaceName)
+                .HasColumnName("place_name")
+                .HasMaxLength(150);
+
+                location.Property(x => x.Address)
+                    .HasColumnName("address")
+                    .HasMaxLength(250);
+
+                location.Property(x => x.GoogleMapsUrl)
+                    .HasColumnName("google_maps_url")
+                    .HasMaxLength(500);
+
+                location.WithOwner();
+            });
+
             builder.Property(x => x.IsActive)
                    .HasColumnName("is_active")
                    .HasDefaultValue(true);
@@ -67,6 +84,13 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             {
                 duration.Property(d => d.Value)
                         .HasColumnName("duration_minutes")
+                        .IsRequired();
+            });
+
+            builder.OwnsOne(x => x.Capacity, capacity =>
+            {
+                capacity.Property(c => c.Value)
+                        .HasColumnName("capacity")
                         .IsRequired();
             });
 

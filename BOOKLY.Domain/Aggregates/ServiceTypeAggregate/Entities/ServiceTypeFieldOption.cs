@@ -15,7 +15,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
 
         private ServiceTypeFieldOption() { }
 
-        internal static ServiceTypeFieldOption Create(int fieldDefinitionId, string value, string label, int sortOrder)
+        internal static ServiceTypeFieldOption Create(int fieldDefinitionId, string value, string label, int sortOrder, DateTime now)
         {
             if (fieldDefinitionId <= 0)
                 throw new DomainException("El FieldDefinitionId es requerido.");
@@ -33,40 +33,40 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities
                 Label = label.Trim(),
                 SortOrder = sortOrder,
                 IsActive = true,
-                CreatedOn = DateTime.UtcNow
+                CreatedOn = now
             };
         }
 
-        internal void ChangeLabel(string label)
+        internal void ChangeLabel(string label, DateTime now)
         {
             ValidateLabel(label);
             var trimmed = label.Trim();
             if (Label == trimmed) return;
             Label = trimmed;
-            UpdatedOn = DateTime.UtcNow;
+            UpdatedOn = now;
         }
 
-        internal void ChangeSortOrder(int sortOrder)
+        internal void ChangeSortOrder(int sortOrder, DateTime now)
         {
             if (sortOrder < 0)
                 throw new DomainException("El orden no puede ser negativo.");
             if (SortOrder == sortOrder) return;
             SortOrder = sortOrder;
-            UpdatedOn = DateTime.UtcNow;
+            UpdatedOn = now;
         }
 
-        internal void Activate()
+        internal void Activate(DateTime now)
         {
             if (IsActive) return;
             IsActive = true;
-            UpdatedOn = DateTime.UtcNow;
+            UpdatedOn = now;
         }
 
-        internal void Deactivate()
+        internal void Deactivate(DateTime now)
         {
             if (!IsActive) return;
             IsActive = false;
-            UpdatedOn = DateTime.UtcNow;
+            UpdatedOn = now;
         }
 
         internal static void ValidateValue(string value)

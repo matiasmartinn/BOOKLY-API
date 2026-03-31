@@ -73,7 +73,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             // Opcional: si querés que DB lo seteé
             // .HasDefaultValueSql("SYSUTCDATETIME()");
 
-            builder.Property(s => s.UpdateOn)
+            builder.Property(s => s.UpdatedOn)
                 .HasColumnName("updated_on")
                 .HasColumnType("datetime2");
 

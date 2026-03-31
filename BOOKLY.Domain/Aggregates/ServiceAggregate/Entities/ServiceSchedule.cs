@@ -24,5 +24,16 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate.Entities
                 Day = day
             };
         }
+
+        public bool CanHost(DateTime startDateTime, Duration duration)
+        {
+            if (Day.Value != (int)startDateTime.DayOfWeek)
+                return false;
+
+            var start = TimeOnly.FromDateTime(startDateTime);
+            var end = TimeOnly.FromDateTime(startDateTime.AddMinutes(duration.Value));
+
+            return Range.Contains(start, end);
+        }
     }
 }

@@ -12,21 +12,29 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
         public Password? Password { get; private set; }
         public UserKind Role { get; private set; }
         public bool IsActive { get; private set; } = true;
+        public bool EmailConfirmed { get; private set; } = true;
         public DateTime CreatedAt { get; private set; }
         public DateTime? LastLoginAt { get; private set; }
         // Private constructor for EF Core
         private User() { }
 
         // Factory Method
-        public static User CreateOwner(PersonName personName, Email email, Password password)
-            => Create(personName, email, password, UserKind.Owner);
-        public static User CreateSecretary(PersonName personName, Email email)
-            => Create(personName, email, null,UserKind.Secretary, false);
-        public static User CreateAdmin(PersonName personName, Email email, Password password)
-            => Create(personName, email, password, UserKind.Admin);
+        public static User CreateOwner(PersonName personName, Email email, Password password, DateTime now)
+            => Create(personName, email, password, UserKind.Owner, now, false, false);
+        public static User CreateSecretary(PersonName personName, Email email, DateTime now)
+            => Create(personName, email, null, UserKind.Secretary, now, false, false);
+        public static User CreateAdmin(PersonName personName, Email email, Password password, DateTime now)
+            => Create(personName, email, password, UserKind.Admin, now, true, true);
 
         // Only way to create new User
-        private static User Create(PersonName personName, Email email, Password? password, UserKind role, bool isActive = true)
+        private static User Create(
+            PersonName personName,
+            Email email,
+            Password? password,
+            UserKind role,
+            DateTime now,
+            bool isActive = true,
+            bool emailConfirmed = true)
         {
             return new User
             {
@@ -34,7 +42,9 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
                 Email = email,
                 Role = role,
                 Password = password ?? null,
-                IsActive = isActive
+                IsActive = isActive,
+                EmailConfirmed = emailConfirmed,
+                CreatedAt = now
             };
         }
 
@@ -55,6 +65,21 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
                 return;
 
             Email = email;
+            RequireEmailConfirmation();
+        }
+
+        public void ConfirmEmail()
+        {
+            EmailConfirmed = true;
+        }
+
+        public void RequireEmailConfirmation()
+        {
+            if (Role == UserKind.Admin)
+                return;
+
+            EmailConfirmed = false;
+            IsActive = false;
         }
 
         public bool VerifyPassword(string plainPassword, IPasswordHasher hasher)
@@ -71,7 +96,15 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
 
         public void Activate()
         {
+            if (Role != UserKind.Admin && !EmailConfirmed)
+                throw new DomainException("El email debe estar confirmado para activar la cuenta.");
+
             IsActive = true;
+        }
+
+        public void RegisterLogin(DateTime now)
+        {
+            LastLoginAt = now;
         }
     }
 }

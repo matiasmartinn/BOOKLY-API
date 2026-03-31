@@ -9,14 +9,23 @@ namespace BOOKLY.Domain.DomainServices
         IReadOnlyCollection<DateTime> GetAvailableSlots(
             Service service,
             IReadOnlyCollection<Appointment> appointments,
-            DateOnly date);
+            DateOnly date,
+            DateTime now);
+
+        IReadOnlyCollection<DateOnly> GetAvailableDates(
+            Service service,
+            IReadOnlyCollection<Appointment> appointments,
+            DateOnly from,
+            DateOnly to,
+            DateTime now);
     }
     public class AvailabilityService : IAvailabilityService
     {
         public IReadOnlyCollection<DateTime> GetAvailableSlots(
             Service service,
             IReadOnlyCollection<Appointment> appointments,
-            DateOnly date)
+            DateOnly date,
+            DateTime now)
         {
             // 1. Día completamente bloqueado por una inhabilitación
             var isFullDayBlocked = service.IsFullDayBlocked(date);
@@ -37,8 +46,6 @@ namespace BOOKLY.Domain.DomainServices
 
             var slotDuration = TimeSpan.FromMinutes(service.DurationMinutes.Value);
             var result = new List<DateTime>();
-            var now = DateTime.Now;
-
             foreach (var schedule in schedulesForDay)
             {
                 var windowStart = date.ToDateTime(schedule.Range.Start);
@@ -63,13 +70,37 @@ namespace BOOKLY.Domain.DomainServices
                     if (now > slotStart)
                         continue;
 
-                    var hasOverlap = appointments.Any(a =>
+                    var overlappingAppointments = appointments.Count(a =>
                         a.StartDateTime < slotEnd &&
                         a.EndDateTime > slotStart);
 
-                    if (!hasOverlap)
+                    if (overlappingAppointments < schedule.Capacity.Value)
                         result.Add(slotStart);
                 }
+            }
+
+            return result.AsReadOnly();
+        }
+
+        public IReadOnlyCollection<DateOnly> GetAvailableDates(
+            Service service,
+            IReadOnlyCollection<Appointment> appointments,
+            DateOnly from,
+            DateOnly to,
+            DateTime now)
+        {
+            var result = new List<DateOnly>();
+
+            for (var date = from; date <= to; date = date.AddDays(1))
+            {
+                var appointmentsForDay = appointments
+                    .Where(a => DateOnly.FromDateTime(a.StartDateTime) == date)
+                    .ToList();
+
+                var slots = GetAvailableSlots(service, appointmentsForDay, date, now);
+
+                if (slots.Count > 0)
+                    result.Add(date);
             }
 
             return result.AsReadOnly();

@@ -1,7 +1,6 @@
-﻿// BOOKLY.Infrastructure/Persistence/Configurations/SubscriptionRepository.cs
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+﻿using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 
-namespace BOOKLY.Infrastructure.Repositories
+namespace BOOKLY.Domain.Repositories
 {
     public interface ISubscriptionRepository
     {

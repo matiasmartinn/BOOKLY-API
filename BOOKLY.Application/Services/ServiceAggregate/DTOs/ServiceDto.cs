@@ -7,8 +7,12 @@
         public int OwnerId { get; init; }
         public string Slug { get; init; } = null!;
         public string? Description { get; init; }
+        public string? PlaceName { get; init; }
+        public string? Address { get; init; }
+        public string? GoogleMapsUrl { get; init; }
         public int ServiceTypeId { get; init; }
         public int DurationMinutes { get; init; }
+        public int Capacity { get; init; }
         public string Mode { get; init; } = null!;
         public bool IsActive { get; init; }
         public decimal? Price { get; init; }

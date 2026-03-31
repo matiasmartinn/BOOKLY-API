@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/subscriptions")]
     public sealed class SubscriptionController : BaseController
     {
         private readonly ISubscriptionService _subscriptionService;
@@ -20,10 +20,21 @@ namespace BOOKLY.Api.Controllers
         /// </summary>
         [HttpGet("owner/{ownerId:int}")]
         [ProducesResponseType(typeof(SubscriptionDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetByOwnerId(int ownerId, CancellationToken ct)
         {
             return HandleResult(await _subscriptionService.GetByOwnerId(ownerId, ct));
+        }
+
+        /// <summary>
+        /// Obtiene el catálogo de planes disponible para un Owner,
+        /// incluyendo si es el plan actual y si puede cambiarse.
+        /// </summary>
+        [HttpGet("owner/{ownerId:int}/plans")]
+        [ProducesResponseType(typeof(IReadOnlyCollection<SubscriptionPlanOptionDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetPlanOptions(int ownerId, CancellationToken ct)
+        {
+            return HandleResult(await _subscriptionService.GetPlanOptions(ownerId, ct));
         }
 
         /// <summary>
@@ -42,7 +53,7 @@ namespace BOOKLY.Api.Controllers
         /// Cancela la suscripción (no renovación).
         /// </summary>
         [HttpPost("owner/{ownerId:int}/cancel")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(SubscriptionDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Cancel(int ownerId, CancellationToken ct)

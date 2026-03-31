@@ -1,28 +1,34 @@
-﻿using BOOKLY.Domain.Aggregates.UserAggregate;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using BOOKLY.Domain.Aggregates.UserAggregate;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace BOOKLY.Infrastructure.Persistence.Configurations
 {
-    public sealed class UserInvitationConfiguration : IEntityTypeConfiguration<UserInvitation>
+    public sealed class UserInvitationConfiguration : IEntityTypeConfiguration<UserToken>
     {
-        public void Configure(EntityTypeBuilder<UserInvitation> builder)
+        public void Configure(EntityTypeBuilder<UserToken> builder)
         {
-            builder.ToTable("user_invitations");
+            builder.ToTable("user_tokens");
 
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Id)
-                   .HasColumnName("user_invitation_id")
+                   .HasColumnName("user_token_id")
                    .ValueGeneratedOnAdd();
 
             builder.Property(x => x.UserId)
                    .HasColumnName("user_id")
                    .IsRequired();
 
+            builder.Property(x => x.Purpose)
+                   .HasColumnName("purpose")
+                   .HasConversion<string>()
+                   .HasMaxLength(50)
+                   .IsRequired();
+
             builder.Property(x => x.TokenHash)
                    .HasColumnName("token_hash")
-                   .HasMaxLength(64) // SHA-256 hex = 64 chars
+                   .HasMaxLength(64)
                    .IsRequired();
 
             builder.Property(x => x.CreatedOn)
@@ -42,17 +48,20 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(x => x.TokenHash)
-                   .HasDatabaseName("ix_user_invitations_token_hash")
+                   .HasDatabaseName("ix_user_tokens_token_hash")
                    .IsUnique();
 
             builder.HasIndex(x => x.UserId)
-                   .HasDatabaseName("ix_user_invitations_user_id");
+                   .HasDatabaseName("ix_user_tokens_user_id");
+
+            builder.HasIndex(x => new { x.UserId, x.Purpose })
+                   .HasDatabaseName("ix_user_tokens_user_id_purpose");
 
             builder.HasIndex(x => x.ExpiresOn)
-                   .HasDatabaseName("ix_user_invitations_expires_on");
+                   .HasDatabaseName("ix_user_tokens_expires_on");
 
             builder.HasIndex(x => x.UsedOn)
-                   .HasDatabaseName("ix_user_invitations_used_on");
+                   .HasDatabaseName("ix_user_tokens_used_on");
         }
     }
 }

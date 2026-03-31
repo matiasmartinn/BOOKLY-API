@@ -17,13 +17,18 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
         }
         public static TimeRange Create(TimeOnly start, TimeOnly end)
         {
-            if (end < start)
+            if (end <= start)
                 throw new DomainException("El tiempo de inicio debe ser menor que el de fin");
             return new TimeRange(start, end);
         }
         public bool OverlapsWith(TimeRange other)
         {
             return Start < other.End && End > other.Start;
+        }
+
+        public bool Contains(TimeOnly start, TimeOnly end)
+        {
+            return Start <= start && End >= end;
         }
     }
 }

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/service-types")]
     public class ServiceTypeController : BaseController
     {
         private readonly IServiceTypeService _serviceTypeService;
@@ -27,7 +27,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Obtiene un tipo de servicio específico por su identificador.
         /// </summary>
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken ct)
@@ -37,7 +37,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Obtiene un tipo de servicio por su identificador, incluyendo sus campos dinámicos configurados.
         /// </summary>
-        [HttpGet("{id}/fields")]
+        [HttpGet("{id:int}/fields")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetByIdWithFields(int id, CancellationToken ct)
@@ -60,7 +60,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Actualiza los datos principales de un tipo de servicio existente.
         /// </summary>
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -71,7 +71,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Elimina un tipo de servicio del sistema.
         /// </summary>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(int id, CancellationToken ct)
@@ -85,7 +85,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Agrega un nuevo campo dinámico a un tipo de servicio.
         /// </summary>
-        [HttpPost("{id}/fields")]
+        [HttpPost("{id:int}/fields")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -99,7 +99,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Actualiza la configuración de un campo dinámico perteneciente a un tipo de servicio.
         /// </summary>
-        [HttpPut("{id}/fields/{fieldId}")]
+        [HttpPut("{id:int}/fields/{fieldId:int}")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -110,7 +110,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Activa un campo dinámico previamente desactivado.
         /// </summary>
-        [HttpPatch("{id}/fields/{fieldId}/activate")]
+        [HttpPatch("{id:int}/fields/{fieldId:int}/activate")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ActivateField(int id, int fieldId, CancellationToken ct)
@@ -120,7 +120,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Desactiva un campo dinámico de un tipo de servicio.
         /// </summary>
-        [HttpPatch("{id}/fields/{fieldId}/deactivate")]
+        [HttpPatch("{id:int}/fields/{fieldId:int}/deactivate")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeactivateField(int id, int fieldId, CancellationToken ct)
@@ -134,7 +134,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Agrega una nueva opción a un campo de tipo selección dentro de un tipo de servicio.
         /// </summary>
-        [HttpPost("{id}/fields/{fieldId}/options")]
+        [HttpPost("{id:int}/fields/{fieldId:int}/options")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -148,7 +148,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Actualiza una opción existente de un campo perteneciente a un tipo de servicio.
         /// </summary>
-        [HttpPut("{id}/fields/{fieldId}/options/{optionId}")]
+        [HttpPut("{id:int}/fields/{fieldId:int}/options/{optionId:int}")]
         [ProducesResponseType(typeof(ServiceTypeDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -159,7 +159,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Elimina una opción de un campo perteneciente a un tipo de servicio.
         /// </summary>
-        [HttpDelete("{id}/fields/{fieldId}/options/{optionId}")]
+        [HttpDelete("{id:int}/fields/{fieldId:int}/options/{optionId:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> RemoveOption(int id, int fieldId, int optionId, CancellationToken ct)
@@ -169,7 +169,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Activa una opción previamente desactivada de un campo.
         /// </summary>
-        [HttpPatch("{id}/fields/{fieldId}/options/{optionId}/activate")]
+        [HttpPatch("{id:int}/fields/{fieldId:int}/options/{optionId:int}/activate")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ActivateOption(int id, int fieldId, int optionId, CancellationToken ct)
@@ -179,7 +179,7 @@ namespace BOOKLY.Api.Controllers
         /// <summary>
         /// Desactiva una opción de un campo perteneciente a un tipo de servicio.
         /// </summary>
-        [HttpPatch("{id}/fields/{fieldId}/options/{optionId}/deactivate")]
+        [HttpPatch("{id:int}/fields/{fieldId:int}/options/{optionId:int}/deactivate")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeactivateOption(int id, int fieldId, int optionId, CancellationToken ct)

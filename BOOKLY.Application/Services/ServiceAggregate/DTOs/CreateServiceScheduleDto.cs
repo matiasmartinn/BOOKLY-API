@@ -7,7 +7,7 @@
     {
         public TimeOnly StartTime { get; init; }
         public TimeOnly EndTime { get; init; }
-        public int Capacity { get; init; }
+        public int? Capacity { get; init; }
         public int Day { get; init; } // 0 = Domingo, 1 = Lunes, etc.
     }
 }
