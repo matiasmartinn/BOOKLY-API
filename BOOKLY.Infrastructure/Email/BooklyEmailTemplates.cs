@@ -8,12 +8,12 @@ namespace BOOKLY.Infrastructure.Email
             => BuildTemplate(
                 "Confirma tu correo",
                 $"Hola {recipientName}, gracias por registrarte en BOOKLY.",
-                "Para activar tu cuenta y comenzar a gestionar tus servicios, confirma tu email desde el siguiente botón.",
-                "Confirmar email",
+                "Para activar tu cuenta y comenzar a gestionar tus servicios, confirma tu correo desde el siguiente botón.",
+                "Confirmar correo",
                 confirmationUrl,
                 [
                     $"Este enlace vence en {expirationHours} horas.",
-                    "Si no creaste esta cuenta, puedes ignorar este correo."
+                "Si no creaste esta cuenta, puedes ignorar este correo."
                 ]);
 
         public static string BuildPasswordResetBody(string recipientName, string resetUrl, int expirationHours)
@@ -35,6 +35,18 @@ namespace BOOKLY.Infrastructure.Email
                 "Has sido invitado a BOOKLY",
                 $"Hola {recipientName}, {invitedByName} te invitó a colaborar en BOOKLY.",
                 $"Tu acceso inicial fue asociado al servicio \"{serviceName}\". Para comenzar, define tu contraseña desde el siguiente enlace.",
+                "Crear contraseña",
+                invitationUrl,
+                [$"Este enlace vence en {expirationHours} horas."]);
+
+        public static string BuildAdminInvitationBody(
+            string recipientName,
+            string invitationUrl,
+            int expirationHours)
+            => BuildTemplate(
+                "Has sido invitado a administrar BOOKLY",
+                $"Hola {recipientName}, tu cuenta de administrador ya fue creada en BOOKLY.",
+                "Para completar el registro y definir tu contraseña, continúa desde el siguiente enlace.",
                 "Crear contraseña",
                 invitationUrl,
                 [$"Este enlace vence en {expirationHours} horas."]);
@@ -81,7 +93,7 @@ namespace BOOKLY.Infrastructure.Email
                 $"Servicio: {serviceName}<br/>Negocio: {businessName}<br/>Fecha original: {FormatDate(startDateTime)}<br/>Hora original: {FormatTime(startDateTime)}.",
                 null,
                 null,
-                BuildCancellationNotes(cancelReason, "Comunicate con el negocio si necesitas coordinar un nuevo horario."));
+                BuildCancellationNotes(cancelReason, "Comunícate con el negocio si necesitas coordinar un nuevo horario."));
 
         public static string BuildAppointmentCancelledOwnerBody(
             string recipientName,
@@ -112,7 +124,7 @@ namespace BOOKLY.Infrastructure.Email
                 $"Servicio: {serviceName}<br/>Negocio: {businessName}<br/>Fecha anterior: {FormatDate(previousStartDateTime)} {FormatTime(previousStartDateTime)}<br/>Nueva fecha: {FormatDate(newStartDateTime)} {FormatTime(newStartDateTime)}<br/>Duración: {durationMinutes} minutos.",
                 null,
                 null,
-                ["Si no reconoces este cambio, comunicate con el negocio."]);
+                ["Si no reconoces este cambio, comunícate con el negocio."]);
 
         public static string BuildAppointmentRescheduledOwnerBody(
             string recipientName,
@@ -155,28 +167,28 @@ namespace BOOKLY.Infrastructure.Email
 
             return $"""
                     <!DOCTYPE html>
-                    <html lang="es">
-                    <head>
-                        <meta charset="utf-8" />
-                        <title>{title}</title>
-                    </head>
-                    <body style="margin:0;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#111827;">
-                        <div style="max-width:640px;margin:32px auto;padding:0 16px;">
-                            <div style="background:#ffffff;border-radius:16px;padding:40px 32px;box-shadow:0 8px 24px rgba(15,23,42,0.08);">
-                                <div style="margin-bottom:24px;">
-                                    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#14532d;font-weight:700;">BOOKLY</div>
-                                    <h1 style="margin:12px 0 0;font-size:28px;line-height:1.2;">{heading}</h1>
-                                </div>
-                                <p style="font-size:15px;line-height:1.7;color:#374151;margin:0 0 16px;">{message}</p>
-                                {actionHtml}
-                                <ul style="margin:24px 0 0;padding-left:20px;font-size:14px;line-height:1.6;color:#4b5563;">
-                                    {notesHtml}
-                                </ul>
-                            </div>
-                        </div>
-                    </body>
-                    </html>
-                    """;
+                 <html lang="es">
+                 <head>
+                     <meta charset="utf-8" />
+                     <title>{title}</title>
+                 </head>
+                 <body style="margin:0;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#111827;">
+                     <div style="max-width:640px;margin:32px auto;padding:0 16px 24px;">
+                         <div style="background:#ffffff;border-radius:16px;padding:40px 32px 52px;box-shadow:0 8px 24px rgba(15,23,42,0.08);">
+                             <div style="margin-bottom:24px;">
+                                 <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#14532d;font-weight:700;">BOOKLY</div>
+                                 <h1 style="margin:12px 0 0;font-size:28px;line-height:1.2;">{heading}</h1>
+                             </div>
+                             <p style="font-size:15px;line-height:1.7;color:#374151;margin:0 0 16px;">{message}</p>
+                             {actionHtml}
+                             <ul style="margin:24px 0 8px;padding-left:20px;font-size:14px;line-height:1.6;color:#4b5563;">
+                                 {notesHtml}
+                             </ul>
+                         </div>
+                     </div>
+                 </body>
+                 </html>
+                 """;
         }
 
         private static string FormatDate(DateTime dateTime)

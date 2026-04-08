@@ -21,10 +21,11 @@ namespace BOOKLY.Infrastructure
         {
             var connectionString = configuration.GetConnectionString("BooklyDb")
                 ?? throw new InvalidOperationException("Connection string 'BooklyDb' no encontrada.");
+            var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);
 
             services.AddDbContext<BooklyDbContext>(options =>
             {
-                options.UseSqlServer(connectionString);
+                options.UseSqlServer(normalizedConnectionString);
 
 #if DEBUG
                 options.EnableSensitiveDataLogging();
@@ -51,13 +52,16 @@ namespace BOOKLY.Infrastructure
                 BaseUrl = configuration["Frontend:BaseUrl"] ?? "http://localhost:5173",
                 ConfirmEmailPath = configuration["Frontend:ConfirmEmailPath"] ?? "/auth/confirm-email",
                 ResetPasswordPath = configuration["Frontend:ResetPasswordPath"] ?? "/auth/reset-password",
-                CompleteSecretaryInvitationPath = configuration["Frontend:CompleteSecretaryInvitationPath"] ?? "/auth/secretary-invitation"
+                CompleteSecretaryInvitationPath = configuration["Frontend:CompleteSecretaryInvitationPath"] ?? "/auth/secretary-invitation",
+                CompleteAdminInvitationPath = configuration["Frontend:CompleteAdminInvitationPath"] ?? "/auth/admin-invitation",
+                PublicBookingPath = configuration["Frontend:PublicBookingPath"] ?? "/book"
             };
 
             services.AddSingleton(Options.Create(emailOptions));
             services.AddSingleton(Options.Create(frontendOptions));
 
             services.AddScoped<IServiceRepository, ServiceRepository>();
+            services.AddScoped<IAdminRepository, AdminRepository>();
 
             services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<BooklyDbContext>());
 
@@ -69,11 +73,11 @@ namespace BOOKLY.Infrastructure
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+            services.AddScoped<IAppointmentHistoryRepository, AppointmentHistoryRepository>();
             services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
             services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
 
             services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
-            services.AddScoped<IAppointmentHistoryRepository, AppointmentHistoryRepository>();
 
             return services;
         }

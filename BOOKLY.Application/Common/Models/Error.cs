@@ -21,5 +21,6 @@
         public static Error Domain(string message, string? code = null) => new(ErrorType.Domain, message, code);
         public static Error Unexpected(string message = "Error inesperado", string? code = null) => new(ErrorType.Unexpected, message, code);
         public static Error Unauthorized(string message, string? code = null) => new(ErrorType.Unauthorized, message, code);
+        public static Error Forbidden(string message, string? code = null) => new(ErrorType.Forbidden, message, code);
     }
 }

@@ -1,3 +1,4 @@
+using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +10,14 @@ namespace BOOKLY.Api.Controllers
     public sealed class SubscriptionController : BaseController
     {
         private readonly ISubscriptionService _subscriptionService;
+        private readonly IUserService _userService;
 
-        public SubscriptionController(ISubscriptionService subscriptionService)
+        public SubscriptionController(
+            ISubscriptionService subscriptionService,
+            IUserService userService)
         {
             _subscriptionService = subscriptionService;
+            _userService = userService;
         }
 
         /// <summary>
@@ -22,6 +27,10 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(typeof(SubscriptionDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetByOwnerId(int ownerId, CancellationToken ct)
         {
+            var ownerValidation = await EnsureOwner(ownerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.GetByOwnerId(ownerId, ct));
         }
 
@@ -34,6 +43,10 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> GetPlanOptions(int ownerId, CancellationToken ct)
         {
+            var ownerValidation = await EnsureOwner(ownerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.GetPlanOptions(ownerId, ct));
         }
 
@@ -46,6 +59,10 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> EnsureFree(int ownerId, CancellationToken ct)
         {
+            var ownerValidation = await EnsureOwner(ownerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.CreateFreeIfMissing(ownerId, ct));
         }
 
@@ -58,6 +75,10 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Cancel(int ownerId, CancellationToken ct)
         {
+            var ownerValidation = await EnsureOwner(ownerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.Cancel(ownerId, ct));
         }
 
@@ -70,6 +91,13 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Renew([FromBody] RenewSubscriptionDto dto, CancellationToken ct)
         {
+            if (dto is null)
+                return HandleResult(Result.Failure(Error.Validation("Los datos de la renovacion son requeridos.")));
+
+            var ownerValidation = await EnsureOwner(dto.OwnerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.Renew(dto, ct));
         }
 
@@ -82,7 +110,25 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> ChangePlan([FromBody] ChangePlanDto dto, CancellationToken ct)
         {
+            if (dto is null)
+                return HandleResult(Result.Failure(Error.Validation("Los datos del cambio de plan son requeridos.")));
+
+            var ownerValidation = await EnsureOwner(dto.OwnerId, ct);
+            if (ownerValidation.IsFailure)
+                return HandleResult(ownerValidation);
+
             return HandleResult(await _subscriptionService.ChangePlan(dto, ct));
+        }
+
+        private async Task<Result> EnsureOwner(int ownerId, CancellationToken ct)
+        {
+            var userResult = await _userService.GetUserById(ownerId, ct);
+            if (userResult.IsFailure)
+                return Result.Failure(userResult.Error);
+
+            return string.Equals(userResult.Data?.Role, "Owner", StringComparison.OrdinalIgnoreCase)
+                ? Result.Success()
+                : Result.Failure(Error.Validation("El id indicado no corresponde a un owner."));
         }
     }
 }

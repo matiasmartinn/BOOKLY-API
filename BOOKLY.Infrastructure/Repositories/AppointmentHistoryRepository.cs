@@ -1,4 +1,3 @@
-// BOOKLY.Infrastructure/Persistence/Configurations/AppointmentHistoryRepository.cs
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Infrastructure.Persistence;

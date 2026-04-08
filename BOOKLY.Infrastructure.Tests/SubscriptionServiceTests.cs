@@ -1,3 +1,4 @@
+using AutoMapper;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
@@ -92,7 +93,14 @@ public sealed class SubscriptionServiceTests
             repository,
             new FakeServiceRepository(),
             new StubDateTimeProvider(now),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(),
+            CreateMapper());
+    }
+
+    private static IMapper CreateMapper()
+    {
+        var configuration = new MapperConfiguration(cfg => cfg.AddMaps(typeof(SubscriptionService).Assembly));
+        return configuration.CreateMapper();
     }
 
     private sealed class FakeSubscriptionRepository : ISubscriptionRepository
@@ -139,6 +147,7 @@ public sealed class SubscriptionServiceTests
         public Task<List<ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceUnavailability>());
         public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default) => Task.FromResult(new List<Service>());
         public Task<List<Service>> GetServicesByOwnerWithSecretaries(int ownerId, CancellationToken ct = default) => Task.FromResult(new List<Service>());
+        public Task<List<int>> GetServiceIdsBySecretary(int secretaryId, CancellationToken ct = default) => Task.FromResult(new List<int>());
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => Task.FromResult(false);
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => Task.FromResult(false);
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(0);

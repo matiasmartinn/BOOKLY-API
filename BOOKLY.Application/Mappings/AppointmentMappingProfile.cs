@@ -7,6 +7,8 @@ namespace BOOKLY.Application.Mappings
 {
     public class AppointmentMappingProfile : Profile
     {
+        public const string ServiceNameContextKey = "Appointment.ServiceName";
+
         public AppointmentMappingProfile()
         {
             CreateMap<AppointmentStatus, string>()
@@ -36,6 +38,20 @@ namespace BOOKLY.Application.Mappings
                 .ForMember(d => d.Status,
                     opt => opt.MapFrom(s => s.Status));
 
+            CreateMap<Appointment, AppointmentListItemDto>()
+                .ForMember(d => d.ServiceName,
+                    opt => opt.MapFrom((_, _, _, context) => GetServiceName(context)))
+                .ForMember(d => d.ClientName,
+                    opt => opt.MapFrom(s => s.Client.ClientName))
+                .ForMember(d => d.ClientPhone,
+                    opt => opt.MapFrom(s => s.Client.Phone))
+                .ForMember(d => d.ClientEmail,
+                    opt => opt.MapFrom(s => s.Client.Email.Value))
+                .ForMember(d => d.DurationMinutes,
+                    opt => opt.MapFrom(s => s.Duration.Value))
+                .ForMember(d => d.Status,
+                    opt => opt.MapFrom(s => s.Status));
+
             // AppointmentFieldValue → AppointmentFieldValueDto
             CreateMap<AppointmentFieldValue, AppointmentFieldValueDto>();
 
@@ -48,6 +64,15 @@ namespace BOOKLY.Application.Mappings
                     opt => opt.MapFrom(s => s.OldStatus.HasValue ? s.OldStatus.Value.ToString() : null))
                 .ForMember(d => d.NewStatus,
                     opt => opt.MapFrom(s => s.NewStatus.ToString()));
+
+        }
+
+        private static string GetServiceName(ResolutionContext context)
+        {
+            return context.Items.TryGetValue(ServiceNameContextKey, out var serviceName) &&
+                   serviceName is string value
+                ? value
+                : string.Empty;
         }
     }
 }

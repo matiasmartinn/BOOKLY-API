@@ -8,6 +8,7 @@ namespace BOOKLY.Application.EventHandler
     public class RecordStatusChangedHandler : IDomainEventHandler<AppointmentStatusChangedEvent>
     {
         private readonly IAppointmentHistoryRepository _historyRepository;
+
         public RecordStatusChangedHandler(IAppointmentHistoryRepository historyRepository)
         {
             _historyRepository = historyRepository;
@@ -21,6 +22,7 @@ namespace BOOKLY.Application.EventHandler
                     @event.NewStatus,
                     @event.Reason,
                     @event.OccurredOn,
-                    @event.UserId), ct);
+                    @event.UserId),
+                ct);
     }
 }

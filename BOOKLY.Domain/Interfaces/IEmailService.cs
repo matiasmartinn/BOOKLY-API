@@ -7,6 +7,7 @@ namespace BOOKLY.Domain.Interfaces
         Task SendEmailConfirmation(EmailConfirmationEmailModel model, CancellationToken ct = default);
         Task SendPasswordReset(PasswordResetEmailModel model, CancellationToken ct = default);
         Task SendSecretaryInvitation(SecretaryInvitationEmailModel model, CancellationToken ct = default);
+        Task SendAdminInvitation(AdminInvitationEmailModel model, CancellationToken ct = default);
         Task SendAppointmentCreatedToClient(AppointmentCreatedClientEmailModel model, CancellationToken ct = default);
         Task SendAppointmentCreatedToOwner(AppointmentCreatedOwnerEmailModel model, CancellationToken ct = default);
         Task SendAppointmentCancelledToClient(AppointmentCancelledClientEmailModel model, CancellationToken ct = default);

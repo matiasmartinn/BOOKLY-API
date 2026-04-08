@@ -33,11 +33,11 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             {
                 Password.Property(p => p.Hash)
                    .HasColumnName("password_hash")
-                   .HasMaxLength(128)
-                   .IsRequired();
+                   .HasMaxLength(128);
             });
 
-            // SETEAR LA NAVEGACION A PASSWORD COMO NULL SI ROMPE. OWNSONE.
+            builder.Navigation(x => x.Password)
+                   .IsRequired(false);
 
             builder.Property(x => x.Role)
                    .HasColumnName("role")
@@ -52,6 +52,11 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.Property(x => x.EmailConfirmed)
                    .HasColumnName("email_confirmed")
                    .HasDefaultValue(false);
+
+            builder.Property(x => x.Status)
+                   .HasColumnName("status")
+                   .HasConversion<int>()
+                   .IsRequired();
 
             builder.Property(x => x.CreatedAt)
                    .HasColumnName("created_at")
@@ -81,6 +86,9 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.HasIndex(x => x.EmailConfirmed)
                    .HasDatabaseName("ix_users_email_confirmed");
+
+            builder.HasIndex(x => x.Status)
+                   .HasDatabaseName("ix_users_status");
 
             builder.HasIndex(x => x.CreatedAt)
                    .HasDatabaseName("ix_users_created_at");

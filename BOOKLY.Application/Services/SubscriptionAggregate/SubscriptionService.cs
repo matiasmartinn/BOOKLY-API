@@ -1,6 +1,8 @@
+using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Interfaces;
@@ -14,17 +16,20 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
         private readonly IServiceRepository _serviceRepository;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IMapper _mapper;
 
         public SubscriptionService(
             ISubscriptionRepository subscriptionRepository,
             IServiceRepository serviceRepository,
             IDateTimeProvider dateTimeProvider,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            IMapper mapper)
         {
             _subscriptionRepository = subscriptionRepository;
             _serviceRepository = serviceRepository;
             _dateTimeProvider = dateTimeProvider;
             _unitOfWork = unitOfWork;
+            _mapper = mapper;
         }
 
         public async Task<Result<SubscriptionDto>> GetByOwnerId(int ownerId, CancellationToken ct = default)
@@ -36,7 +41,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             var now = _dateTimeProvider.NowArgentina();
             var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscription(subscription, ownerId, now));
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, ownerId, now));
         }
 
         public async Task<Result<IReadOnlyCollection<SubscriptionPlanOptionDto>>> GetPlanOptions(int ownerId, CancellationToken ct = default)
@@ -51,7 +56,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             var (currentServices, currentSecretaries) = await GetOwnerCounts(ownerId, ct);
 
             var options = SubscriptionPlan.GetCatalog()
-                .Select(plan => BuildPlanOption(plan, current, currentServices, currentSecretaries))
+                .Select(plan => MapPlanOptionDto(plan, current.Plan.Name, currentServices, currentSecretaries))
                 .ToList()
                 .AsReadOnly();
 
@@ -67,13 +72,13 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             var now = _dateTimeProvider.NowArgentina();
             var existing = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
             if (existing != null)
-                return Result<SubscriptionDto>.Success(MapSubscription(existing, ownerId, now));
+                return Result<SubscriptionDto>.Success(MapSubscriptionDto(existing, ownerId, now));
 
             var subscription = Subscription.CreateFree(ownerId, now);
             await _subscriptionRepository.AddOne(subscription, ct);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscription(subscription, ownerId, now));
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, ownerId, now));
         }
 
         public async Task<Result<SubscriptionDto>> Cancel(int ownerId, CancellationToken ct = default)
@@ -84,7 +89,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(ownerId, ct);
             if (subscription == null)
-                return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
+                return Result<SubscriptionDto>.Failure(Error.NotFound("SuscripciÃ³n"));
 
             var now = _dateTimeProvider.NowArgentina();
             subscription.Cancel(now);
@@ -92,7 +97,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             _subscriptionRepository.Update(subscription);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscription(subscription, ownerId, now));
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, ownerId, now));
         }
 
         public async Task<Result<SubscriptionDto>> Renew(RenewSubscriptionDto dto, CancellationToken ct = default)
@@ -103,7 +108,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
             if (subscription == null)
-                return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
+                return Result<SubscriptionDto>.Failure(Error.NotFound("SuscripciÃ³n"));
 
             var now = _dateTimeProvider.NowArgentina();
             var newPeriod = CreatePaidMonthlyPeriod(now);
@@ -112,7 +117,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             _subscriptionRepository.Update(subscription);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscription(subscription, dto.OwnerId, now));
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
         }
 
         public async Task<Result<SubscriptionDto>> ChangePlan(ChangePlanDto dto, CancellationToken ct = default)
@@ -141,17 +146,17 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
                     var freeSubscription = Subscription.CreateFree(dto.OwnerId, now);
                     await _subscriptionRepository.AddOne(freeSubscription, ct);
                     await _unitOfWork.SaveChanges(ct);
-                    return Result<SubscriptionDto>.Success(MapSubscription(freeSubscription, dto.OwnerId, now));
+                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(freeSubscription, dto.OwnerId, now));
                 }
 
                 var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, paidPeriod!, now);
                 await _subscriptionRepository.AddOne(paidSubscription, ct);
                 await _unitOfWork.SaveChanges(ct);
-                return Result<SubscriptionDto>.Success(MapSubscription(paidSubscription, dto.OwnerId, now));
+                return Result<SubscriptionDto>.Success(MapSubscriptionDto(paidSubscription, dto.OwnerId, now));
             }
 
             if (newPlan.Name == subscription.Plan.Name)
-                return Result<SubscriptionDto>.Success(MapSubscription(subscription, dto.OwnerId, now));
+                return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
 
             if (newPlan.Name == PlanName.Free)
             {
@@ -180,73 +185,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             _subscriptionRepository.Update(subscription);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscription(subscription, dto.OwnerId, now));
-        }
-
-        private static SubscriptionDto MapSubscription(Subscription? persistedSubscription, int ownerId, DateTime now)
-        {
-            var subscription = persistedSubscription ?? Subscription.CreateFree(ownerId, now);
-            var today = DateOnly.FromDateTime(now);
-            var isPersisted = persistedSubscription is not null;
-            var isExpired = subscription.IsExpired(today);
-            var isCancelled = subscription.Status == SubscriptionStatus.Cancelled;
-
-            return new SubscriptionDto
-            {
-                Id = subscription.Id,
-                OwnerId = ownerId,
-                IsPersisted = isPersisted,
-                CurrentPlan = MapPlan(subscription.Plan),
-                Status = GetEffectiveStatus(subscription, today),
-                RawStatus = GetRawStatus(subscription.Status),
-                RawStatusCode = (int)subscription.Status,
-                IsActive = subscription.IsActive(today),
-                IsCancelled = isCancelled,
-                IsExpired = isExpired,
-                PendingCancellation = isCancelled && !isExpired,
-                CanCancel = subscription.Plan.Name != PlanName.Free && !isCancelled && !isExpired,
-                CanRenew = subscription.Plan.Name != PlanName.Free,
-                StartDate = subscription.Period.StartDate,
-                EndDate = subscription.Period.EndDate,
-                IsOpenEnded = subscription.Period.IsOpenEnded,
-                CreatedOn = isPersisted ? subscription.CreatedOn : null,
-                UpdatedOn = isPersisted ? subscription.UpdatedOn : null
-            };
-        }
-
-        private static SubscriptionPlanOptionDto BuildPlanOption(
-            SubscriptionPlan plan,
-            Subscription current,
-            int currentServices,
-            int currentSecretaries)
-        {
-            var isCurrent = plan.Name == current.Plan.Name;
-            var canChange = !isCurrent;
-            string? unavailableReason = isCurrent ? "Este es el plan actual." : null;
-
-            if (!isCurrent && plan.Name < current.Plan.Name)
-            {
-                if (!plan.AllowsServices(currentServices))
-                {
-                    canChange = false;
-                    unavailableReason = "No se puede bajar de plan: excede el límite de servicios.";
-                }
-                else if (!plan.AllowsSecretaries(currentSecretaries))
-                {
-                    canChange = false;
-                    unavailableReason = "No se puede bajar de plan: excede el límite de secretarios.";
-                }
-            }
-
-            return new SubscriptionPlanOptionDto
-            {
-                Plan = MapPlan(plan),
-                IsCurrent = isCurrent,
-                ChangeType = GetChangeType(plan.Name, current.Plan.Name),
-                CanChange = canChange,
-                RequiresPeriod = false,
-                UnavailableReason = unavailableReason
-            };
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
         }
 
         private async Task<(int Services, int Secretaries)> GetOwnerCounts(int ownerId, CancellationToken ct)
@@ -256,31 +195,15 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             return (currentServices, currentSecretaries);
         }
 
-        private static SubscriptionPlanDto MapPlan(SubscriptionPlan plan)
-        {
-            return new SubscriptionPlanDto
-            {
-                Code = (int)plan.Name,
-                Key = GetPlanKey(plan.Name),
-                DisplayName = GetPlanDisplayName(plan.Name),
-                Limits = new SubscriptionPlanLimitsDto
-                {
-                    MaxServices = plan.MaxServices,
-                    MaxSecretaries = plan.MaxSecretaries,
-                    AllowsExtraFields = plan.AllowsExtraFields()
-                }
-            };
-        }
-
         private static (SubscriptionPlan? Plan, Error? Error) ResolvePlan(ChangePlanDto dto)
         {
             if (!string.IsNullOrWhiteSpace(dto.TargetPlan) && dto.PlanName.HasValue)
             {
                 if (!TryParsePlanName(dto.TargetPlan!, out var parsedPlanName))
-                    return (null, Error.Validation("El plan indicado es inválido."));
+                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
 
                 if (!TryGetDefinedPlanName(dto.PlanName.Value, out var legacyPlanName))
-                    return (null, Error.Validation("El plan indicado es inválido."));
+                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
 
                 if (parsedPlanName != legacyPlanName)
                     return (null, Error.Validation("Los datos del plan son inconsistentes."));
@@ -291,7 +214,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (!string.IsNullOrWhiteSpace(dto.TargetPlan))
             {
                 if (!TryParsePlanName(dto.TargetPlan!, out var parsedPlanName))
-                    return (null, Error.Validation("El plan indicado es inválido."));
+                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
 
                 return (SubscriptionPlan.FromName(parsedPlanName), null);
             }
@@ -299,7 +222,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (dto.PlanName.HasValue)
             {
                 if (!TryGetDefinedPlanName(dto.PlanName.Value, out var legacyPlanName))
-                    return (null, Error.Validation("El plan indicado es inválido."));
+                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
 
                 return (SubscriptionPlan.FromName(legacyPlanName), null);
             }
@@ -348,56 +271,30 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             return false;
         }
 
-        private static string GetEffectiveStatus(Subscription subscription, DateOnly today)
+        private SubscriptionDto MapSubscriptionDto(Subscription? persistedSubscription, int ownerId, DateTime now)
         {
-            if (subscription.IsExpired(today))
-                return "expired";
+            var subscription = persistedSubscription ?? Subscription.CreateFree(ownerId, now);
 
-            return subscription.Status == SubscriptionStatus.Cancelled
-                ? "pending_cancellation"
-                : "active";
-        }
-
-        private static string GetRawStatus(SubscriptionStatus status)
-        {
-            return status switch
+            return _mapper.Map<SubscriptionDto>(subscription, options =>
             {
-                SubscriptionStatus.Active => "active",
-                SubscriptionStatus.Cancelled => "cancelled",
-                _ => "unknown"
-            };
+                options.Items[SubscriptionMappingProfile.OwnerIdContextKey] = ownerId;
+                options.Items[SubscriptionMappingProfile.TodayContextKey] = DateOnly.FromDateTime(now);
+                options.Items[SubscriptionMappingProfile.IsPersistedContextKey] = persistedSubscription is not null;
+            });
         }
 
-        private static string GetPlanKey(PlanName planName)
+        private SubscriptionPlanOptionDto MapPlanOptionDto(
+            SubscriptionPlan plan,
+            PlanName currentPlanName,
+            int currentServices,
+            int currentSecretaries)
         {
-            return planName switch
+            return _mapper.Map<SubscriptionPlanOptionDto>(plan, options =>
             {
-                PlanName.Free => "free",
-                PlanName.Pro => "pro",
-                PlanName.Max => "max",
-                _ => "unknown"
-            };
-        }
-
-        private static string GetPlanDisplayName(PlanName planName)
-        {
-            return planName switch
-            {
-                PlanName.Free => "Free",
-                PlanName.Pro => "Pro",
-                PlanName.Max => "Max",
-                _ => "Unknown"
-            };
-        }
-
-        private static string GetChangeType(PlanName targetPlan, PlanName currentPlan)
-        {
-            if (targetPlan == currentPlan)
-                return "current";
-
-            return targetPlan > currentPlan
-                ? "upgrade"
-                : "downgrade";
+                options.Items[SubscriptionMappingProfile.CurrentPlanNameContextKey] = currentPlanName;
+                options.Items[SubscriptionMappingProfile.CurrentServicesContextKey] = currentServices;
+                options.Items[SubscriptionMappingProfile.CurrentSecretariesContextKey] = currentSecretaries;
+            });
         }
     }
 }

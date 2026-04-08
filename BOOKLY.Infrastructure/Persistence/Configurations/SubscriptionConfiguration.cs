@@ -1,4 +1,5 @@
-﻿using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -13,16 +14,21 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.HasKey(s => s.Id);
 
             builder.Property(s => s.Id)
-                .HasColumnName("id")
+                .HasColumnName("subscription_id")
                 .ValueGeneratedOnAdd();
 
             builder.Property(s => s.OwnerId)
-                .HasColumnName("user_id")
+                .HasColumnName("owner_id")
                 .IsRequired();
 
             builder.HasIndex(s => s.OwnerId)
-                .HasDatabaseName("ux_subscriptions_user_id")
+                .HasDatabaseName("ux_subscriptions_owner_id")
                 .IsUnique();
+
+            builder.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(s => s.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             builder.Property(s => s.Status)
                 .HasColumnName("status")
@@ -70,8 +76,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                 .HasColumnName("created_on")
                 .HasColumnType("datetime2")
                 .IsRequired();
-            // Opcional: si querés que DB lo seteé
-            // .HasDefaultValueSql("SYSUTCDATETIME()");
 
             builder.Property(s => s.UpdatedOn)
                 .HasColumnName("updated_on")
@@ -81,16 +85,14 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             {
                 t.HasCheckConstraint(
                     "ck_subscriptions_period_dates",
-                    "[end_date] IS NULL OR [end_date] >= [start_date]"
-                );
+                    "[end_date] IS NULL OR [end_date] >= [start_date]");
             });
 
             builder.ToTable(t =>
             {
                 t.HasCheckConstraint(
                     "ck_subscriptions_free_end_date",
-                    "[plan_name] <> 1 OR [end_date] IS NULL"
-                );
+                    "[plan_name] <> 1 OR [end_date] IS NULL");
             });
         }
     }

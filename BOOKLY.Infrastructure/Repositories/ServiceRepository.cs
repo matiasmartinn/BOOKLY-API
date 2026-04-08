@@ -9,6 +9,15 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
     {
         public ServiceRepository(BooklyDbContext context) : base(context) { }
 
+        public Task<Service?> GetBySlug(string slug, CancellationToken ct = default)
+        {
+            var normalizedSlug = NormalizeSlug(slug);
+
+            return dbContext.Services
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(s => s.Slug.Value == normalizedSlug, ct);
+        }
+
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default)
         {
             return dbContext.Services
@@ -56,6 +65,17 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .Include(s => s.ServiceSchedules)
                 .Include(s => s.ServicesUnavailability)
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
+        }
+
+        public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default)
+        {
+            var normalizedSlug = NormalizeSlug(slug);
+
+            return dbContext.Services
+                .AsSplitQuery()
+                .Include(s => s.ServiceSchedules)
+                .Include(s => s.ServicesUnavailability)
+                .FirstOrDefaultAsync(s => s.Slug.Value == normalizedSlug, ct);
         }
 
         public async Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
@@ -119,6 +139,22 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .Include(s => s.ServiceSecretaries)
                 .AsNoTracking()
                 .ToListAsync(ct);
+        }
+
+        public Task<List<int>> GetServiceIdsBySecretary(int secretaryId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .AsNoTracking()
+                .Where(s => s.ServiceSecretaries.Any(ss => ss.SecretaryId == secretaryId))
+                .Select(s => s.Id)
+                .ToListAsync(ct);
+        }
+
+        private static string NormalizeSlug(string slug)
+        {
+            return string.IsNullOrWhiteSpace(slug)
+                ? string.Empty
+                : slug.Trim().ToLowerInvariant().Replace(" ", "-");
         }
 
     }

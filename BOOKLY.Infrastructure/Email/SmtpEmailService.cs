@@ -58,6 +58,20 @@ namespace BOOKLY.Infrastructure.Email
                     model.ExpirationHours),
                 ct);
 
+        public Task SendAdminInvitation(AdminInvitationEmailModel model, CancellationToken ct = default)
+            => SendAsync(
+                model.RecipientEmail,
+                model.RecipientName,
+                "Invitacion para administrar BOOKLY",
+                BooklyEmailTemplates.BuildAdminInvitationBody(
+                    model.RecipientName,
+                    BuildUrl(
+                        _frontendOptions.CompleteAdminInvitationPath,
+                        "Frontend:CompleteAdminInvitationPath",
+                        model.Token),
+                    model.ExpirationHours),
+                ct);
+
         public Task SendAppointmentCreatedToClient(AppointmentCreatedClientEmailModel model, CancellationToken ct = default)
             => SendAsync(
                 model.RecipientEmail,

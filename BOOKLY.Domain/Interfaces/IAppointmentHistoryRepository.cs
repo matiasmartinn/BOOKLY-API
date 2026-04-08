@@ -1,4 +1,4 @@
-﻿using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
+using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 
 namespace BOOKLY.Domain.Interfaces
 {

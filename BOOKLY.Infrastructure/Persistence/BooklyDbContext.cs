@@ -86,7 +86,7 @@ namespace BOOKLY.Infrastructure.Persistence
                 {
                     2627 or 2601 => new ConflictException("Ya existe un registro con esos datos únicos."),
                     547 => new ConflictException("Violación de integridad referencial."),
-                    _ => new ConflictException($"Error de base de datos ({sqlEx.Number}).")
+                    _ => new InvalidOperationException($"Error de base de datos ({sqlEx.Number}).", ex)
                 };
             }
         }

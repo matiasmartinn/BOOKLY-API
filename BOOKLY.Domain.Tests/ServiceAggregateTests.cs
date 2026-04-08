@@ -18,6 +18,17 @@ public sealed class ServiceAggregateTests
     }
 
     [Fact]
+    public void Create_ShouldInitializePublicBookingData()
+    {
+        var service = CreateService(3);
+
+        Assert.True(service.IsPublicBookingEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(service.PublicBookingToken));
+        Assert.Equal(32, service.PublicBookingToken.Length);
+        Assert.Equal(ReferenceNow, service.PublicBookingTokenUpdateAt);
+    }
+
+    [Fact]
     public void GetScheduleFor_ShouldReturnMatchingSchedule()
     {
         var start = ReferenceNow.Date.AddDays(1).AddHours(9);
@@ -37,6 +48,36 @@ public sealed class ServiceAggregateTests
         Assert.Equal(4, schedule!.Capacity.Value);
     }
 
+    [Fact]
+    public void RegeneratePublicBookingToken_ShouldRotateTokenAndUpdateTimestamp()
+    {
+        var service = CreateService(3);
+        var originalToken = service.PublicBookingToken;
+        var regeneratedAt = ReferenceNow.AddHours(2);
+
+        service.RegeneratePublicBookingToken(regeneratedAt);
+
+        Assert.NotEqual(originalToken, service.PublicBookingToken);
+        Assert.Equal(regeneratedAt, service.PublicBookingTokenUpdateAt);
+    }
+
+    [Fact]
+    public void HasValidPublicBookingAccess_ShouldRequireMatchingSlugTokenAndEnabledActiveService()
+    {
+        var service = CreateService(3);
+
+        Assert.True(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
+        Assert.False(service.HasValidPublicBookingAccess("otro-servicio", service.PublicBookingToken));
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", "token-invalido"));
+
+        service.DisablePublicBooking();
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
+
+        service.EnablePublicBooking(ReferenceNow.AddMinutes(5));
+        service.Deactivate();
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
+    }
+
     private static Service CreateService(int capacity)
     {
         return Service.Create(
@@ -45,9 +86,8 @@ public sealed class ServiceAggregateTests
             "consulta-general",
             "Servicio de prueba",
             null,
-            null,
-            null,
             1,
+            ReferenceNow,
             Duration.Create(60),
             Capacity.Create(capacity),
             Mode.Presence,

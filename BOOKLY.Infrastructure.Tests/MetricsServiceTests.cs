@@ -1,8 +1,7 @@
-using BOOKLY.Application.EventHandler;
+using AutoMapper;
 using BOOKLY.Application.Services.MetricsAggregate;
 using BOOKLY.Application.Services.MetricsAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
-using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.UserAggregate;
@@ -37,7 +36,8 @@ public sealed class MetricsServiceTests
         var metricsService = new MetricsService(
             appointmentRepository,
             serviceRepository,
-            new StubUserRepository());
+            new StubUserRepository(),
+            CreateMapper());
 
         var trackedService = CreateService("Masajes", "masajes");
         var ignoredService = CreateService("Kinesiologia", "kinesiologia");
@@ -117,11 +117,8 @@ public sealed class MetricsServiceTests
 
         services.AddDbContext<BooklyDbContext>(options => options.UseSqlite(connection));
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
-        services.AddScoped<IAppointmentHistoryRepository, AppointmentHistoryRepository>();
         services.AddScoped<IAppointmentRepository, AppointmentRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
-        services.AddScoped<IDomainEventHandler<AppointmentCreatedEvent>, RecordAppointmentCreatedHandler>();
-        services.AddScoped<IDomainEventHandler<AppointmentStatusChangedEvent>, RecordStatusChangedHandler>();
 
         return services.BuildServiceProvider();
     }
@@ -148,14 +145,19 @@ public sealed class MetricsServiceTests
             userId: 99,
             slug: slug,
             description: null,
-            placeName: null,
-            address: null,
-            googleMapsUrl: null,
+            location: null,
             serviceType: 1,
+            createdAt: CreationNow,
             duration: Duration.Create(60),
             capacity: Capacity.Create(1),
             mode: Mode.Presence,
             price: null);
+    }
+
+    private static IMapper CreateMapper()
+    {
+        var configuration = new MapperConfiguration(cfg => cfg.AddMaps(typeof(MetricsService).Assembly));
+        return configuration.CreateMapper();
     }
 
     private sealed class StubUserRepository : IUserRepository

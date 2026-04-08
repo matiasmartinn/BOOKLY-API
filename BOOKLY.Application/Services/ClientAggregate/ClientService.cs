@@ -1,8 +1,11 @@
+using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.ClientAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Interfaces;
 
 namespace BOOKLY.Application.Services.ClientAggregate
@@ -13,17 +16,20 @@ namespace BOOKLY.Application.Services.ClientAggregate
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IUserRepository _userRepository;
         private readonly IDateTimeProvider _dateTimeProvider;
+        private readonly IMapper _mapper;
 
         public ClientService(
             IServiceRepository serviceRepository,
             IAppointmentRepository appointmentRepository,
             IUserRepository userRepository,
-            IDateTimeProvider dateTimeProvider)
+            IDateTimeProvider dateTimeProvider,
+            IMapper mapper)
         {
             _serviceRepository = serviceRepository;
             _appointmentRepository = appointmentRepository;
             _userRepository = userRepository;
             _dateTimeProvider = dateTimeProvider;
+            _mapper = mapper;
         }
 
         public async Task<Result<IReadOnlyCollection<ClientListItemDto>>> GetByOwner(int ownerId, string? search = null, CancellationToken ct = default)
@@ -122,7 +128,7 @@ namespace BOOKLY.Application.Services.ClientAggregate
         private async Task<(Error? Error, List<AppointmentListItemDto>? Appointments)> LoadAppointmentsByOwner(int ownerId, CancellationToken ct)
         {
             var owner = await _userRepository.GetOne(ownerId, ct);
-            if (owner == null || owner.Role != UserKind.Owner)
+            if (owner == null || owner.Role != UserRole.Owner)
                 return (Error.NotFound("Usuario"), null);
 
             var services = await _serviceRepository.GetServicesByOwner(ownerId, ct);
@@ -131,25 +137,20 @@ namespace BOOKLY.Application.Services.ClientAggregate
             foreach (var service in services)
             {
                 var serviceAppointments = await _appointmentRepository.GetByService(service.Id, ct);
-                appointments.AddRange(serviceAppointments.Select(appointment => new AppointmentListItemDto
-                {
-                    Id = appointment.Id,
-                    ServiceId = appointment.ServiceId,
-                    ServiceName = service.Name,
-                    AssignedSecretaryId = appointment.AssignedSecretaryId,
-                    ClientName = appointment.Client.ClientName,
-                    ClientPhone = appointment.Client.Phone,
-                    ClientEmail = appointment.Client.Email.Value,
-                    StartDateTime = appointment.StartDateTime,
-                    EndDateTime = appointment.EndDateTime,
-                    DurationMinutes = appointment.Duration.Value,
-                    Status = appointment.Status.ToString(),
-                    ClientNotes = appointment.ClientNotes,
-                    CreatedOn = appointment.CreatedOn
-                }));
+                appointments.AddRange(serviceAppointments.Select(appointment => MapAppointmentListItem(appointment, service.Name)));
             }
 
             return (null, appointments);
+        }
+
+        private AppointmentListItemDto MapAppointmentListItem(
+            Domain.Aggregates.AppointmentAggregate.Appointment appointment,
+            string serviceName)
+        {
+            return _mapper.Map<AppointmentListItemDto>(appointment, options =>
+            {
+                options.Items[AppointmentMappingProfile.ServiceNameContextKey] = serviceName;
+            });
         }
     }
 }

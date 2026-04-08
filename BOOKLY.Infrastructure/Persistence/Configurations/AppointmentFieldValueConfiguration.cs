@@ -14,7 +14,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.HasKey(fv => fv.Id);
 
             builder.Property(fv => fv.Id)
-                .HasColumnName("id")
+                .HasColumnName("appointment_field_value_id")
                 .ValueGeneratedOnAdd();
 
             builder.Property(fv => fv.AppointmentId)

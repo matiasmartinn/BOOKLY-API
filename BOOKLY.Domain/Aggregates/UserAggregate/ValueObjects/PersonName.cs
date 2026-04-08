@@ -1,6 +1,6 @@
 ﻿using BOOKLY.Domain.Exceptions;
 
-namespace BOOKLY.Domain.Aggregates.UserAggregate
+namespace BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects
 {
     public record PersonName
     {

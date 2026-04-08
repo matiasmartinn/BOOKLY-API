@@ -1,5 +1,7 @@
-﻿using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -32,16 +34,16 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.OwnsOne(x => x.Location, location =>
             {
                 location.Property(x => x.PlaceName)
-                .HasColumnName("place_name")
-                .HasMaxLength(150);
+                        .HasColumnName("place_name")
+                        .HasMaxLength(150);
 
                 location.Property(x => x.Address)
-                    .HasColumnName("address")
-                    .HasMaxLength(250);
+                        .HasColumnName("address")
+                        .HasMaxLength(250);
 
                 location.Property(x => x.GoogleMapsUrl)
-                    .HasColumnName("google_maps_url")
-                    .HasMaxLength(500);
+                        .HasColumnName("google_maps_url")
+                        .HasMaxLength(500);
 
                 location.WithOwner();
             });
@@ -49,6 +51,20 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.Property(x => x.IsActive)
                    .HasColumnName("is_active")
                    .HasDefaultValue(true);
+
+            builder.Property(x => x.IsPublicBookingEnabled)
+                   .HasColumnName("is_public_booking_enabled")
+                   .HasDefaultValue(true)
+                   .IsRequired();
+
+            builder.Property(x => x.PublicBookingToken)
+                   .HasColumnName("public_booking_token")
+                   .HasMaxLength(64)
+                   .IsRequired();
+
+            builder.Property(x => x.PublicBookingTokenUpdateAt)
+                   .HasColumnName("public_booking_token_update_at")
+                   .HasColumnType("datetime2");
 
             builder.Property(x => x.Price)
                    .HasColumnName("price")
@@ -58,6 +74,12 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("service_type_id")
                    .IsRequired();
 
+            builder.Property(x => x.CreatedAt)
+                   .HasColumnName("created_at")
+                   .HasColumnType("datetime2")
+                   .HasDefaultValueSql("GETDATE()")
+                   .IsRequired();
+
             builder.Property(x => x.Mode)
                    .HasColumnName("mode")
                    .HasConversion<int>();
@@ -65,8 +87,25 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.HasIndex(x => x.OwnerId)
                    .HasDatabaseName("ix_services_owner_id");
 
+            builder.HasIndex(x => x.PublicBookingToken)
+                   .IsUnique()
+                   .HasDatabaseName("ux_services_public_booking_token");
+
             builder.HasIndex(x => x.ServiceTypeId)
                    .HasDatabaseName("ix_services_service_type_id");
+
+            builder.HasIndex(x => x.CreatedAt)
+                   .HasDatabaseName("ix_services_created_at");
+
+            builder.HasOne<User>()
+                   .WithMany()
+                   .HasForeignKey(x => x.OwnerId)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne<ServiceType>()
+                   .WithMany()
+                   .HasForeignKey(x => x.ServiceTypeId)
+                   .OnDelete(DeleteBehavior.Restrict);
 
             builder.OwnsOne(x => x.Slug, slug =>
             {
@@ -187,14 +226,14 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                        .HasDatabaseName("ix_service_unavailabilities_service_id");
             });
 
-            builder.Navigation(s => s.ServiceSecretaries)
-                   .HasField("_serviceSecretaries")
-                   .UsePropertyAccessMode(PropertyAccessMode.Field);
-
             builder.HasMany(s => s.ServiceSecretaries)
                    .WithOne()
                    .HasForeignKey(ss => ss.ServiceId)
                    .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Navigation(s => s.ServiceSecretaries)
+                   .HasField("_serviceSecretaries")
+                   .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             builder.Ignore(x => x.SecretaryIds);
         }

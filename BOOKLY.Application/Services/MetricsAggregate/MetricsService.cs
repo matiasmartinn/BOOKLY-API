@@ -1,9 +1,12 @@
+using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.MetricsAggregate.DTOs;
+using BOOKLY.Application.Services.MetricsAggregate.Models;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Queries;
 
@@ -26,15 +29,18 @@ namespace BOOKLY.Application.Services.MetricsAggregate
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IServiceRepository _serviceRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IMapper _mapper;
 
         public MetricsService(
             IAppointmentRepository appointmentRepository,
             IServiceRepository serviceRepository,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            IMapper mapper)
         {
             _appointmentRepository = appointmentRepository;
             _serviceRepository = serviceRepository;
             _userRepository = userRepository;
+            _mapper = mapper;
         }
 
         public async Task<Result<AppointmentMetricsDto>> GetAppointmentMetrics(
@@ -68,7 +74,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                 var emptyByHour = BuildHourBuckets([]);
                 var emptyByWeekday = BuildWeekdayBuckets([]);
 
-                return Result<AppointmentMetricsDto>.Success(new AppointmentMetricsDto
+                return Result<AppointmentMetricsDto>.Success(MapMetricsDto(new AppointmentMetricsSnapshot
                 {
                     From = currentFrom,
                     To = currentTo,
@@ -86,7 +92,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                     AppointmentsByWeekday = emptyByWeekday,
                     BusiestDays = [],
                     BusiestHours = []
-                });
+                }));
             }
 
             var serviceIds = services.Select(service => service.Id).ToList();
@@ -148,7 +154,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                 .FirstOrDefault(x => x.Status == AppointmentStatus.Attended)?
                 .TotalAppointments ?? 0;
 
-            return Result<AppointmentMetricsDto>.Success(new AppointmentMetricsDto
+            return Result<AppointmentMetricsDto>.Success(MapMetricsDto(new AppointmentMetricsSnapshot
             {
                 From = currentFrom,
                 To = currentTo,
@@ -176,7 +182,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                     .ThenBy(x => x.Hour)
                     .Take(TopBucketCount)
                     .ToList()
-            });
+            }));
         }
 
         private async Task<Result<List<Service>>> ResolveScopedServices(int? ownerId, int? serviceId, CancellationToken ct)
@@ -199,7 +205,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                     Error.Validation("Debe indicar ownerId o serviceId."));
 
             var owner = await _userRepository.GetOne(ownerId.Value, ct);
-            if (owner == null || owner.Role != UserKind.Owner)
+            if (owner == null || owner.Role != UserRole.Owner)
                 return Result<List<Service>>.Failure(Error.NotFound("Usuario"));
 
             var services = await _serviceRepository.GetServicesByOwner(ownerId.Value, ct);
@@ -214,7 +220,12 @@ namespace BOOKLY.Application.Services.MetricsAggregate
             return (previousFrom, previousTo);
         }
 
-        private static IReadOnlyCollection<AppointmentMetricsDayBucketDto> BuildDayBuckets(
+        private AppointmentMetricsDto MapMetricsDto(AppointmentMetricsSnapshot snapshot)
+        {
+            return _mapper.Map<AppointmentMetricsDto>(snapshot);
+        }
+
+        private static IReadOnlyCollection<AppointmentDayCountResult> BuildDayBuckets(
             DateOnly from,
             DateOnly to,
             IReadOnlyCollection<AppointmentDayCountResult> dayCounts)
@@ -227,43 +238,36 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                 .Select(offset =>
                 {
                     var date = from.AddDays(offset);
-                    return new AppointmentMetricsDayBucketDto
-                    {
-                        Date = date,
-                        TotalAppointments = totalsByDate.GetValueOrDefault(date, 0)
-                    };
+                    return new AppointmentDayCountResult(
+                        date,
+                        totalsByDate.GetValueOrDefault(date, 0));
                 })
                 .ToList();
         }
 
-        private static IReadOnlyCollection<AppointmentMetricsHourBucketDto> BuildHourBuckets(
+        private static IReadOnlyCollection<AppointmentHourCountResult> BuildHourBuckets(
             IReadOnlyCollection<AppointmentHourCountResult> hourCounts)
         {
             var totalsByHour = hourCounts.ToDictionary(x => x.Hour, x => x.TotalAppointments);
 
             return Enumerable
                 .Range(0, 24)
-                .Select(hour => new AppointmentMetricsHourBucketDto
-                {
-                    Hour = hour,
-                    Label = $"{hour:00}:00",
-                    TotalAppointments = totalsByHour.GetValueOrDefault(hour, 0)
-                })
+                .Select(hour => new AppointmentHourCountResult(
+                    hour,
+                    totalsByHour.GetValueOrDefault(hour, 0)))
                 .ToList();
         }
 
-        private static IReadOnlyCollection<AppointmentMetricsWeekdayBucketDto> BuildWeekdayBuckets(
+        private static IReadOnlyCollection<AppointmentMetricsWeekdayBucketSource> BuildWeekdayBuckets(
             IReadOnlyCollection<AppointmentWeekdayCountResult> weekdayCounts)
         {
             var totalsByWeekday = weekdayCounts.ToDictionary(x => x.DayOfWeek, x => x.TotalAppointments);
 
             return OrderedWeekdays
-                .Select(weekday => new AppointmentMetricsWeekdayBucketDto
-                {
-                    DayOfWeek = (int)weekday.DayOfWeek,
-                    Label = weekday.Label,
-                    TotalAppointments = totalsByWeekday.GetValueOrDefault((int)weekday.DayOfWeek, 0)
-                })
+                .Select(weekday => new AppointmentMetricsWeekdayBucketSource(
+                    (int)weekday.DayOfWeek,
+                    weekday.Label,
+                    totalsByWeekday.GetValueOrDefault((int)weekday.DayOfWeek, 0)))
                 .ToList();
         }
 

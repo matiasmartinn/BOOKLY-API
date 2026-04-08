@@ -11,13 +11,18 @@ namespace BOOKLY.Infrastructure.Repositories
 
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default)
         {
-            return Set.AnyAsync(user => user.Email.Value == email, ct);
+            var normalizedEmail = NormalizeEmail(email);
+            return Set.AnyAsync(user => user.Email.Value == normalizedEmail, ct);
         }
 
         public async Task<User?> GetByEmail(string email, CancellationToken ct = default)
         {
+            var normalizedEmail = NormalizeEmail(email);
             return await dbContext.Users
-                .FirstOrDefaultAsync(u => u.Email.Value == email, ct);
+                .FirstOrDefaultAsync(u => u.Email.Value == normalizedEmail, ct);
         }
+
+        private static string NormalizeEmail(string email)
+            => email.Trim().ToLowerInvariant();
     }
 }

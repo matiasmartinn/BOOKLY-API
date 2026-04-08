@@ -1,5 +1,7 @@
-﻿using BOOKLY.Application.Common.Models;
+using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Services.ServiceAggregate.DTOs;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 
 namespace BOOKLY.Application.Interfaces
 {
@@ -10,11 +12,17 @@ namespace BOOKLY.Application.Interfaces
         Task<Result<ServiceDto>> CreateService(CreateServiceDto dto, CancellationToken ct = default);
         Task<Result<ServiceDto>> UpdateService(int id, UpdateServiceDto dto, CancellationToken ct = default);
         Task<Result> DeleteService(int id, CancellationToken ct = default);
+        Task<Result<ServicePublicBookingDto>> GetPublicBooking(int serviceId, CancellationToken ct = default);
+        Task<Result<ServicePublicBookingDto>> EnablePublicBooking(int serviceId, CancellationToken ct = default);
+        Task<Result<ServicePublicBookingDto>> DisablePublicBooking(int serviceId, CancellationToken ct = default);
+        Task<Result<ServicePublicBookingDto>> RegeneratePublicBooking(int serviceId, CancellationToken ct = default);
         Task<Result<List<ServiceScheduleDto>>> GetSchedulesByService(int serviceId, CancellationToken ct = default);
         Task<Result<List<ScheduleUnavailabilityDto>>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default);
         Task<Result<ServiceDto>> SetSecretaries(int id, SetSecretariesDto dto, CancellationToken ct = default);
+        Task<Result> GrantSecretaryPermission(int serviceId, int secretaryId, SecretaryPermission permission, int currentUserId, UserRole currentUserRole, CancellationToken ct = default);
+        Task<Result> RevokeSecretaryPermission(int serviceId, int secretaryId, SecretaryPermission permission, int currentUserId, UserRole currentUserRole, CancellationToken ct = default);
         Task<Result<ServiceDto>> SetSchedule(int id, List<CreateServiceScheduleDto> dto, CancellationToken ct = default);
-        Task<Result<List<ScheduleUnavailabilityDto>>> GetScheduleUnavailability(int id, CancellationToken ct= default);
+        Task<Result<List<ScheduleUnavailabilityDto>>> GetScheduleUnavailability(int id, CancellationToken ct = default);
         Task<Result> AddUnavailability(int id, CreateUnavailabilityDto dto, CancellationToken ct = default);
         Task<Result> RemoveUnavailability(int id, int unavailabilityId, CancellationToken ct = default);
         Task<Result> Activate(int id, CancellationToken ct = default);

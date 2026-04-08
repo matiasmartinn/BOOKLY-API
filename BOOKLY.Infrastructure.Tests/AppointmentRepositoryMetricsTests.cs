@@ -1,6 +1,4 @@
-using BOOKLY.Application.EventHandler;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
-using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure;
@@ -74,10 +72,7 @@ public sealed class AppointmentRepositoryMetricsTests
 
         services.AddDbContext<BooklyDbContext>(options => options.UseSqlite(connection));
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
-        services.AddScoped<IAppointmentHistoryRepository, AppointmentHistoryRepository>();
         services.AddScoped<IAppointmentRepository, AppointmentRepository>();
-        services.AddScoped<IDomainEventHandler<AppointmentCreatedEvent>, RecordAppointmentCreatedHandler>();
-        services.AddScoped<IDomainEventHandler<AppointmentStatusChangedEvent>, RecordStatusChangedHandler>();
 
         return services.BuildServiceProvider();
     }

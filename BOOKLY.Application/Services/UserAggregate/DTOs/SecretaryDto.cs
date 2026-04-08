@@ -9,6 +9,7 @@ namespace BOOKLY.Application.Services.UserAggregate.DTOs
         public string Email { get; init; } = null!;
         public bool IsActive { get; init; }
         public bool EmailConfirmed { get; init; }
+        public string Status { get; init; } = null!;
         public IReadOnlyCollection<int> ServiceIds { get; init; } = [];
     }
 }

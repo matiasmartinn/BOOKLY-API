@@ -1,4 +1,5 @@
-﻿using BOOKLY.Domain.Exceptions;
+﻿using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
+using BOOKLY.Domain.Exceptions;
 
 namespace BOOKLY.Domain.Aggregates.UserAggregate
 {

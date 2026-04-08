@@ -1,7 +1,7 @@
 ﻿using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 
-namespace BOOKLY.Domain.Aggregates.UserAggregate
+namespace BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects
 {
     public record Password
     {

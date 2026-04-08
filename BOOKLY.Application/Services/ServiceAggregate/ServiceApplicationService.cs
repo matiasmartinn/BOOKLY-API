@@ -1,4 +1,4 @@
-﻿using BOOKLY.Application.Services.ServiceAggregate.DTOs;
+using BOOKLY.Application.Services.ServiceAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Application.Common.Models;
@@ -8,6 +8,7 @@ using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Application.Common;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.DomainServices;
 using System.Globalization;
 using System.Text;
@@ -15,6 +16,9 @@ using System.Text.RegularExpressions;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Repositories;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
+using BOOKLY.Infrastructure.Email;
+using Microsoft.Extensions.Options;
 
 namespace BOOKLY.Application.Services.ServiceAggregate
 {
@@ -27,8 +31,10 @@ namespace BOOKLY.Application.Services.ServiceAggregate
         private readonly IServiceTypeRepository _serviceTypeRepository;
         private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IDateTimeProvider _dateTimeProvider;
+        private readonly IServiceAuthorizationService _authorizationService;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly FrontendOptions _frontendOptions;
 
         public ServiceApplicationService(
             IServiceRepository serviceRepository,
@@ -38,9 +44,11 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             IServiceTypeRepository serviceTypeRepository,
             ISubscriptionRepository subscriptionRepository,
             IDateTimeProvider dateTimeProvider,
+            IServiceAuthorizationService authorizationService,
             IMapper mapper,
-            IUnitOfWork unitOfWork
-            ) 
+            IUnitOfWork unitOfWork,
+            IOptions<FrontendOptions> frontendOptions
+            )
         {
             _serviceRepository = serviceRepository;
             _appointmentRepository = appointmentRepository;
@@ -49,13 +57,15 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             _serviceTypeRepository = serviceTypeRepository;
             _subscriptionRepository = subscriptionRepository;
             _dateTimeProvider = dateTimeProvider;
+            _authorizationService = authorizationService;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
+            _frontendOptions = frontendOptions.Value;
         }
 
         public async Task<Result<ServiceDto>> GetServiceById(int id, CancellationToken ct = default)
         {
-            var service = await _serviceRepository.GetOne(id, ct);
+            var service = await _serviceRepository.GetOneWithSecretaries(id, ct);
             if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
@@ -68,7 +78,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (user == null)
                 return Result<List<ServiceDto>>.Failure(Error.NotFound("Usuario"));
 
-            var services = await _serviceRepository.GetServicesByOwner(ownerId, ct);
+            var services = await _serviceRepository.GetServicesByOwnerWithSecretaries(ownerId, ct);
             if (!services.Any())
                 return Result<List<ServiceDto>>.Failure(Error.NotFound("Services"));
 
@@ -97,8 +107,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 dto.OwnerId,
                 slug,
                 dto.Description,
-                Location.Create(dto.PlaceName, dto.Address,dto.GoogleMapsUrl),
+                Location.Create(dto.PlaceName, dto.Address, dto.GoogleMapsUrl),
                 dto.ServiceTypeId,
+                _dateTimeProvider.NowArgentina(),
                 Duration.Create(dto.DurationMinutes),
                 Capacity.Create(dto.Capacity),
                 Mode.Presence,
@@ -118,8 +129,10 @@ namespace BOOKLY.Application.Services.ServiceAggregate
         {
             var service = await _serviceRepository.GetOne(id, ct);
 
-            if(service == null)
+            if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
+
+            var serviceToUpdate = service;
 
             ServiceType? nextServiceType = null;
             if (dto.ServiceTypeId.HasValue)
@@ -129,17 +142,20 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                     return Result<ServiceDto>.Failure(Error.NotFound("TipoServicio"));
             }
 
-            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
+            var subscription = await GetEffectiveSubscription(serviceToUpdate.OwnerId, ct);
 
-            if(dto.Name != null) {
-                service.ChangeName(dto.Name);
+            if (dto.Name != null)
+            {
+                serviceToUpdate.ChangeName(dto.Name);
             }
-            if(dto.Slug != null) {
+            if (dto.Slug != null)
+            {
                 var slug = await GenerateUniqueSlugAsync(dto.Slug, id, ct);
-                service.ChangeSlug(slug);
+                serviceToUpdate.ChangeSlug(slug);
             }
-            if(!string.IsNullOrWhiteSpace(dto.Description)) {
-                service.ChangeDescription(dto.Description);
+            if (!string.IsNullOrWhiteSpace(dto.Description))
+            {
+                serviceToUpdate.ChangeDescription(dto.Description);
             }
 
             var isLocationBeingUpdated =
@@ -149,32 +165,35 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 
             if (isLocationBeingUpdated)
             {
-                service.ChangeLocation(
-                    dto.PlaceName ?? service?.Location.PlaceName,
-                    dto.Address ?? service?.Location.Address,
-                    dto.GoogleMapsUrl ?? service?.Location.GoogleMapsUrl);
+                serviceToUpdate.ChangeLocation(
+                    dto.PlaceName ?? serviceToUpdate.Location?.PlaceName,
+                    dto.Address ?? serviceToUpdate.Location?.Address,
+                    dto.GoogleMapsUrl ?? serviceToUpdate.Location?.GoogleMapsUrl);
             }
 
-            if (dto.DurationMinutes != null ) {
-                service.ChangeDuration(dto.DurationMinutes.Value);
+            if (dto.DurationMinutes != null)
+            {
+                serviceToUpdate.ChangeDuration(dto.DurationMinutes.Value);
             }
-            if(dto.Capacity != null) {
-                service.ChangeCapacity(dto.Capacity.Value);
+            if (dto.Capacity != null)
+            {
+                serviceToUpdate.ChangeCapacity(dto.Capacity.Value);
             }
 
             if (dto.ServiceTypeId.HasValue)
             {
                 EnsureExtraFieldsAllowed(subscription, nextServiceType!);
-                service.ChangeServiceType(dto.ServiceTypeId.Value);
+                serviceToUpdate.ChangeServiceType(dto.ServiceTypeId.Value);
             }
 
-            if(dto.Price != null){
-                service.ChangePrice(dto.Price.Value);
+            if (dto.Price != null)
+            {
+                serviceToUpdate.ChangePrice(dto.Price.Value);
             }
 
-            _serviceRepository.Update(service);
+            _serviceRepository.Update(serviceToUpdate);
             await _unitOfWork.SaveChanges(ct);
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(serviceToUpdate));
         }
 
         public async Task<Result> DeleteService(int id, CancellationToken ct = default)
@@ -182,12 +201,63 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             var service = await _serviceRepository.GetOne(id, ct);
 
             if (service == null)
-            return Result.Failure(Error.NotFound("Servicio"));
-            
+                return Result.Failure(Error.NotFound("Servicio"));
+
             service.Deactivate();
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
+        }
+
+        public async Task<Result<ServicePublicBookingDto>> GetPublicBooking(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
+
+            return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
+        }
+
+        public async Task<Result<ServicePublicBookingDto>> EnablePublicBooking(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
+
+            service.EnablePublicBooking(_dateTimeProvider.NowArgentina());
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
+        }
+
+        public async Task<Result<ServicePublicBookingDto>> DisablePublicBooking(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
+
+            service.DisablePublicBooking();
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
+        }
+
+        public async Task<Result<ServicePublicBookingDto>> RegeneratePublicBooking(int serviceId, CancellationToken ct = default)
+        {
+            var service = await _serviceRepository.GetOne(serviceId, ct);
+            if (service == null)
+                return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
+
+            service.RegeneratePublicBookingToken(_dateTimeProvider.NowArgentina());
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+
+            return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
         }
 
         public async Task<Result<List<ServiceScheduleDto>>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
@@ -197,7 +267,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 return Result<List<ServiceScheduleDto>>.Failure(Error.NotFound("Servicio"));
 
             var schedules = await _serviceRepository.GetSchedulesByService(serviceId, ct);
-            
+
             return Result<List<ServiceScheduleDto>>.Success(_mapper.Map<List<ServiceScheduleDto>>(schedules));
         }
 
@@ -212,7 +282,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             foreach (var secretaryId in secretaryIds)
             {
                 var secretary = await _userRepository.GetOne(secretaryId, ct);
-                if (secretary == null || secretary.Role != Domain.Aggregates.UserAggregate.UserKind.Secretary)
+                if (secretary == null || secretary.Role != UserRole.Secretary)
                     return Result<ServiceDto>.Failure(Error.Validation("Todos los usuarios asignados deben ser secretarios válidos."));
             }
 
@@ -221,6 +291,64 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
             return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+        }
+
+        public async Task<Result> GrantSecretaryPermission(
+            int serviceId,
+            int secretaryId,
+            SecretaryPermission permission,
+            int currentUserId,
+            UserRole currentUserRole,
+            CancellationToken ct = default)
+        {
+            if (!Enum.IsDefined(typeof(SecretaryPermission), permission))
+                return Result.Failure(Error.Validation("El permiso indicado no es válido."));
+
+            var service = await _serviceRepository.GetOneWithSecretaries(serviceId, ct);
+            if (service == null)
+                return Result.Failure(Error.NotFound("Servicio"));
+
+            if (!CanManageSecretaryPermissions(service, currentUserId, currentUserRole))
+                return Result.Failure(Error.Forbidden("No tiene permisos para administrar permisos de secretarios en este servicio."));
+
+            var secretaryValidation = await ValidateSecretaryAssignmentAsync(service, secretaryId, ct);
+            if (secretaryValidation.IsFailure)
+                return secretaryValidation;
+
+            service.GrantSecretaryPermission(secretaryId, permission);
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
+        }
+
+        public async Task<Result> RevokeSecretaryPermission(
+            int serviceId,
+            int secretaryId,
+            SecretaryPermission permission,
+            int currentUserId,
+            UserRole currentUserRole,
+            CancellationToken ct = default)
+        {
+            if (!Enum.IsDefined(typeof(SecretaryPermission), permission))
+                return Result.Failure(Error.Validation("El permiso indicado no es válido."));
+
+            var service = await _serviceRepository.GetOneWithSecretaries(serviceId, ct);
+            if (service == null)
+                return Result.Failure(Error.NotFound("Servicio"));
+
+            if (!CanManageSecretaryPermissions(service, currentUserId, currentUserRole))
+                return Result.Failure(Error.Forbidden("No tiene permisos para administrar permisos de secretarios en este servicio."));
+
+            var secretaryValidation = await ValidateSecretaryAssignmentAsync(service, secretaryId, ct);
+            if (secretaryValidation.IsFailure)
+                return secretaryValidation;
+
+            service.RevokeSecretaryPermission(secretaryId, permission);
+
+            _serviceRepository.Update(service);
+            await _unitOfWork.SaveChanges(ct);
+            return Result.Success();
         }
 
         public async Task<Result<List<ScheduleUnavailabilityDto>>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default)
@@ -243,7 +371,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 
             var schedules = BuildSchedules(dto, services.Capacity.Value);
             services.SetSchedules(schedules);
-            
+
             _serviceRepository.Update(services);
             await _unitOfWork.SaveChanges(ct);
             return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(services));
@@ -328,7 +456,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result<List<DateTime>>.Failure(Error.NotFound("Servicio"));
 
-            var appointments= await _appointmentRepository.GetByServiceAndDate(id, date, ct);
+            var appointments = await _appointmentRepository.GetByServiceAndDate(id, date, ct);
 
             var slots = _availabilityService.GetAvailableSlots(service, appointments, date, _dateTimeProvider.NowArgentina());
             return Result<List<DateTime>>.Success(slots.ToList());
@@ -368,6 +496,36 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 .ToList();
         }
 
+        private async Task<Result> ValidateSecretaryAssignmentAsync(Service service, int secretaryId, CancellationToken ct)
+        {
+            var secretary = await _userRepository.GetOne(secretaryId, ct);
+            if (secretary == null)
+                return Result.Failure(Error.NotFound("Secretario"));
+
+            if (secretary.Role != UserRole.Secretary)
+                return Result.Failure(Error.Validation("El usuario indicado no es un secretario válido."));
+
+            if (!service.ServiceSecretaries.Any(x => x.SecretaryId == secretaryId))
+                return Result.Failure(Error.Validation("El secretario no pertenece al servicio."));
+
+            return Result.Success();
+        }
+
+        private bool CanManageSecretaryPermissions(Service service, int currentUserId, UserRole currentUserRole)
+        {
+            if (currentUserRole == UserRole.Admin)
+                return true;
+
+            if (currentUserRole != UserRole.Owner)
+                return false;
+
+            return _authorizationService.HasPermission(
+                service,
+                currentUserId,
+                currentUserRole,
+                SecretaryPermission.ManageSchedules);
+        }
+
         private async Task<string> GenerateUniqueSlugAsync(string source, int? excludedServiceId, CancellationToken ct)
         {
             var baseSlug = Slugify(source);
@@ -394,10 +552,38 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             return subscription;
         }
 
+        private ServicePublicBookingDto MapPublicBooking(Service service)
+        {
+            return new ServicePublicBookingDto
+            {
+                ServiceId = service.Id,
+                Slug = service.Slug.Value,
+                IsEnabled = service.IsPublicBookingEnabled,
+                PublicBookingToken = service.PublicBookingToken,
+                PublicBookingTokenUpdatedAt = service.PublicBookingTokenUpdateAt,
+                PublicUrl = BuildPublicBookingUrl(service)
+            };
+        }
+
         private static void EnsureExtraFieldsAllowed(Subscription subscription, ServiceType serviceType)
         {
             if (serviceType.HasActiveFields())
                 subscription.EnsureCanUseExtraFields();
+        }
+
+        private string BuildPublicBookingUrl(Service service)
+        {
+            var baseUrl = (_frontendOptions.BaseUrl ?? string.Empty).TrimEnd('/');
+            var publicBookingPath = string.IsNullOrWhiteSpace(_frontendOptions.PublicBookingPath)
+                ? "/book"
+                : _frontendOptions.PublicBookingPath.Trim();
+
+            if (!publicBookingPath.StartsWith('/'))
+                publicBookingPath = $"/{publicBookingPath}";
+
+            publicBookingPath = publicBookingPath.TrimEnd('/');
+
+            return $"{baseUrl}{publicBookingPath}/{Uri.EscapeDataString(service.Slug.Value)}/{Uri.EscapeDataString(service.PublicBookingToken)}";
         }
 
         private static string Slugify(string value)

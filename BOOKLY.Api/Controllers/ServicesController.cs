@@ -1,6 +1,8 @@
 ﻿using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.ServiceAggregate.DTOs;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers
@@ -78,6 +80,40 @@ namespace BOOKLY.Api.Controllers
         }
         #endregion
 
+        #region Public Booking
+        [HttpGet("{id:int}/public-booking")]
+        [ProducesResponseType(typeof(ServicePublicBookingDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetPublicBooking(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.GetPublicBooking(id, ct));
+        }
+
+        [HttpPost("{id:int}/public-booking/enable")]
+        [ProducesResponseType(typeof(ServicePublicBookingDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> EnablePublicBooking(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.EnablePublicBooking(id, ct));
+        }
+
+        [HttpPost("{id:int}/public-booking/disable")]
+        [ProducesResponseType(typeof(ServicePublicBookingDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DisablePublicBooking(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.DisablePublicBooking(id, ct));
+        }
+
+        [HttpPost("{id:int}/public-booking/regenerate")]
+        [ProducesResponseType(typeof(ServicePublicBookingDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> RegeneratePublicBooking(int id, CancellationToken ct)
+        {
+            return HandleResult(await _serviceApplicationService.RegeneratePublicBooking(id, ct));
+        }
+        #endregion
+
         #region Schedules
         [HttpGet("{id:int}/schedules")]
         [ProducesResponseType(typeof(IEnumerable<ServiceScheduleDto>), StatusCodes.Status200OK)]
@@ -102,6 +138,52 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> SetSecretaries(int id, [FromBody] SetSecretariesDto dto, CancellationToken ct)
         {
             return HandleResult(await _serviceApplicationService.SetSecretaries(id, dto, ct));
+        }
+
+        [HttpPut("{id:int}/secretaries/{secretaryId:int}/permissions/{permission}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GrantSecretaryPermission(
+            int id,
+            int secretaryId,
+            SecretaryPermission permission,
+            [FromQuery] int currentUserId,
+            [FromQuery] UserRole currentUserRole,
+            CancellationToken ct)
+        {
+            return HandleResult(
+                await _serviceApplicationService.GrantSecretaryPermission(
+                    id,
+                    secretaryId,
+                    permission,
+                    currentUserId,
+                    currentUserRole,
+                    ct));
+        }
+
+        [HttpDelete("{id:int}/secretaries/{secretaryId:int}/permissions/{permission}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> RevokeSecretaryPermission(
+            int id,
+            int secretaryId,
+            SecretaryPermission permission,
+            [FromQuery] int currentUserId,
+            [FromQuery] UserRole currentUserRole,
+            CancellationToken ct)
+        {
+            return HandleResult(
+                await _serviceApplicationService.RevokeSecretaryPermission(
+                    id,
+                    secretaryId,
+                    permission,
+                    currentUserId,
+                    currentUserRole,
+                    ct));
         }
 
         /// <summary>

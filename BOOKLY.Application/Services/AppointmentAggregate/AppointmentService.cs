@@ -1,6 +1,7 @@
 using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
@@ -8,6 +9,7 @@ using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
@@ -30,6 +32,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AppointmentService> _logger;
         private readonly IDateTimeProvider _dateTimeProvider;
+        private readonly IServiceAuthorizationService _serviceAuthorizationService;
 
         public AppointmentService(
             IAppointmentRepository repository,
@@ -42,6 +45,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IMapper mapper,
             IUnitOfWork unitOfWork,
             IDateTimeProvider dateTimeProvider,
+            IServiceAuthorizationService serviceAuthorizationService,
             ILogger<AppointmentService> logger)
         {
             _repository = repository;
@@ -55,6 +59,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _unitOfWork = unitOfWork;
             _logger = logger;
             _dateTimeProvider = dateTimeProvider;
+            _serviceAuthorizationService = serviceAuthorizationService;
         }
 
         public async Task<Result<AppointmentDto>> GetById(int id, CancellationToken ct = default)
@@ -113,7 +118,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             var serviceNames = services.ToDictionary(service => service.Id, service => service.Name);
             var result = appointments
-                .Select(appointment => ToListItemDto(
+                .Select(appointment => MapListItemDto(
                     appointment,
                     serviceNames.GetValueOrDefault(appointment.ServiceId, string.Empty)))
                 .ToList();
@@ -161,7 +166,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             var serviceNames = services.ToDictionary(service => service.Id, service => service.Name);
             var filtered = appointments
-                .Select(appointment => ToListItemDto(
+                .Select(appointment => MapListItemDto(
                     appointment,
                     serviceNames.GetValueOrDefault(appointment.ServiceId, string.Empty)))
                 .ToList();
@@ -194,6 +199,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         public async Task<Result<AppointmentDto>> CreateAppointment(CreateAppointmentDto dto, CancellationToken ct = default)
         {
             var now = _dateTimeProvider.NowArgentina();
+
             var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(dto.ServiceId, ct);
             if (service == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
@@ -488,7 +494,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 return Result<List<Service>>.Failure(Error.Validation("Debe indicar ownerId o serviceId."));
 
             var owner = await _userRepository.GetOne(ownerId.Value, ct);
-            if (owner == null || owner.Role != UserKind.Owner)
+            if (owner == null || owner.Role != UserRole.Owner)
                 return Result<List<Service>>.Failure(Error.NotFound("Usuario"));
 
             var services = await _serviceRepository.GetServicesByOwner(ownerId.Value, ct);
@@ -498,25 +504,12 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private static int? NormalizeActorUserId(int? userId)
             => userId.HasValue && userId.Value > 0 ? userId.Value : null;
 
-        private static AppointmentListItemDto ToListItemDto(Appointment appointment, string serviceName)
+        private AppointmentListItemDto MapListItemDto(Appointment appointment, string serviceName)
         {
-            return new AppointmentListItemDto
+            return _mapper.Map<AppointmentListItemDto>(appointment, options =>
             {
-                Id = appointment.Id,
-                ServiceId = appointment.ServiceId,
-                ServiceName = serviceName,
-                AssignedSecretaryId = appointment.AssignedSecretaryId,
-                ClientName = appointment.Client.ClientName,
-                ClientPhone = appointment.Client.Phone,
-                ClientEmail = appointment.Client.Email.Value,
-                StartDateTime = appointment.StartDateTime,
-                EndDateTime = appointment.EndDateTime,
-                DurationMinutes = appointment.Duration.Value,
-                Status = appointment.Status.ToString(),
-                ClientNotes = appointment.ClientNotes,
-                CancelReason = appointment.CancelReason,
-                CreatedOn = appointment.CreatedOn
-            };
+                options.Items[AppointmentMappingProfile.ServiceNameContextKey] = serviceName;
+            });
         }
 
         // Las notificaciones de email son complementarias y no deben revertir la operación principal.

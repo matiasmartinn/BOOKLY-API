@@ -12,7 +12,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
         {
             builder.ToTable("appointment_status_history");
             builder.Property(x => x.Id)
-                .HasColumnName("id")
+                .HasColumnName("appointment_status_history_id")
                 .ValueGeneratedOnAdd();
             builder.HasKey(x => x.Id);
 

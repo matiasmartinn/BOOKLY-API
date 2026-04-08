@@ -20,6 +20,12 @@ namespace BOOKLY.Domain.Emailing
         string Token,
         int ExpirationHours);
 
+    public sealed record AdminInvitationEmailModel(
+        string RecipientEmail,
+        string RecipientName,
+        string Token,
+        int ExpirationHours);
+
     public sealed record AppointmentCreatedClientEmailModel(
         string RecipientEmail,
         string RecipientName,

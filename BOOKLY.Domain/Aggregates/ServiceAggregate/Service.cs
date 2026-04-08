@@ -1,7 +1,7 @@
-﻿using System.Net;
+using System.Net;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.SharedKernel;
 
@@ -22,20 +22,23 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public string? Description { get; private set; }
         public Location? Location { get; private set; }
         public int ServiceTypeId { get; private set; }
+        public DateTime CreatedAt { get; private set; }
         public Duration DurationMinutes { get; private set; } = null!;
         public Capacity Capacity { get; private set; } = null!;
         public Mode Mode { get; private set; }
         public bool IsActive { get; private set; }
         public decimal? Price { get; private set; }
 
+        public bool IsPublicBookingEnabled { get; private set; } = true;
+        public string PublicBookingToken { get; private set; } = null!;
+        public DateTime? PublicBookingTokenUpdateAt { get; private set; }
+
+
         public IReadOnlyCollection<ServiceSchedule> ServiceSchedules => _serviceSchedules.AsReadOnly();
         public IReadOnlyCollection<ServiceSecretary> ServiceSecretaries => _serviceSecretaries.AsReadOnly();
         public IReadOnlyCollection<int> SecretaryIds =>
             _serviceSecretaries.Select(x => x.SecretaryId).ToList().AsReadOnly();
         public IReadOnlyCollection<ServiceUnavailability> ServicesUnavailability => _serviceUnavailability.AsReadOnly();
-
-
-        // Navegación 
 
         // EF core ctor
         private Service() { }
@@ -46,6 +49,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             string? description,
             Location? location,
             int serviceType,
+            DateTime createdAt,
             Duration duration,
             Capacity capacity,
             Mode mode,
@@ -56,6 +60,9 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             if (userId <= 0)
                 throw new DomainException("El dueño es requerido");
 
+            if (createdAt == default)
+                throw new DomainException("La fecha de creaciÃ³n es requerida");
+
             return new Service
             {
                 Name = name.Trim(),
@@ -64,11 +71,15 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 Description = description?.Trim(),
                 Location = location,
                 ServiceTypeId = serviceType,
+                CreatedAt = createdAt,
                 DurationMinutes = duration,
                 Capacity = capacity,
                 Mode = mode,
                 Price = price,
-                IsActive = true
+                IsActive = true,
+                IsPublicBookingEnabled = true,
+                PublicBookingToken = GeneratePublicBookingToken(),
+                PublicBookingTokenUpdateAt = createdAt
             };
         }
 
@@ -94,7 +105,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         {
             var newSlug = Slug.Create(slug);
             if (!newSlug.Equals(Slug))
-            Slug = newSlug;
+                Slug = newSlug;
         }
 
         public void ChangeDuration(int duration)
@@ -110,9 +121,9 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
 
         public void ChangePrice(decimal price)
         {
-            if(price < 0)
+            if (price < 0)
                 throw new DomainException("El precio tiene que ser mayor a 0.");
-            if(Price !=  price) 
+            if (Price != price)
                 Price = price;
         }
         public void ChangeServiceType(int serviceTypeId)
@@ -161,8 +172,34 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             if (secretaryIds.Any(id => id <= 0))
                 throw new DomainException("Todos los IDs deben ser mayores a 0");
 
+            var existingSecretaries = _serviceSecretaries.ToDictionary(x => x.SecretaryId);
+            var updatedSecretaries = secretaryIds
+                .Select(secretaryId =>
+                    existingSecretaries.TryGetValue(secretaryId, out var existingSecretary)
+                        ? existingSecretary
+                        : ServiceSecretary.Create(secretaryId))
+                .ToList();
+
             _serviceSecretaries.Clear();
-            _serviceSecretaries.AddRange(secretaryIds.Select(ServiceSecretary.Create));
+            _serviceSecretaries.AddRange(updatedSecretaries);
+        }
+
+        public void GrantSecretaryPermission(int secretaryId, SecretaryPermission permission)
+        {
+            var secretary = GetRequiredSecretary(secretaryId);
+            secretary.GrantPermission(permission);
+        }
+
+        public void RevokeSecretaryPermission(int secretaryId, SecretaryPermission permission)
+        {
+            var secretary = GetRequiredSecretary(secretaryId);
+            secretary.RevokePermission(permission);
+        }
+
+        public bool SecretaryHasPermission(int secretaryId, SecretaryPermission permission)
+        {
+            var secretary = GetRequiredSecretary(secretaryId);
+            return secretary.HasPermission(permission);
         }
 
         public void SetSchedules(IEnumerable<ServiceSchedule> schedules)
@@ -240,7 +277,78 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             _serviceUnavailability.Remove(item);
         }
 
-        //
+        public void EnablePublicBooking(DateTime now)
+        {
+            IsPublicBookingEnabled = true;
+
+            if (string.IsNullOrWhiteSpace(PublicBookingToken))
+            {
+                PublicBookingToken = GeneratePublicBookingToken();
+                PublicBookingTokenUpdateAt = now;
+            }
+        }
+
+        public void DisablePublicBooking()
+        {
+            IsPublicBookingEnabled = false;
+        }
+
+        public void RegeneratePublicBookingToken(DateTime now)
+        {
+            PublicBookingToken = GeneratePublicBookingToken();
+            PublicBookingTokenUpdateAt = now;
+        }
+
+        public bool MatchesPublicBookingAccess(string slug, string token)
+        {
+            return string.Equals(Slug.Value, NormalizeSlug(slug), StringComparison.Ordinal) &&
+                   string.Equals(PublicBookingToken, NormalizePublicBookingToken(token), StringComparison.Ordinal);
+        }
+
+        public bool HasValidPublicBookingAccess(string slug, string token)
+        {
+            return MatchesPublicBookingAccess(slug, token) &&
+                   IsActive &&
+                   IsPublicBookingEnabled;
+        }
+
+        public void EnabledPublicBooking(DateTime now) => EnablePublicBooking(now);
+
+        public void DisabledPublicBooking() => DisablePublicBooking();
+
+        private static string GeneratePublicBookingToken()
+        {
+            return Convert.ToHexString(Guid.NewGuid().ToByteArray())
+                .Replace("-", string.Empty)
+                .ToLowerInvariant();
+        }
+
+        private static string NormalizeSlug(string slug)
+        {
+            return string.IsNullOrWhiteSpace(slug)
+                ? string.Empty
+                : slug.Trim().ToLowerInvariant().Replace(" ", "-");
+        }
+
+        private static string NormalizePublicBookingToken(string token)
+        {
+            return string.IsNullOrWhiteSpace(token)
+                ? string.Empty
+                : token.Trim().ToLowerInvariant();
+        }
+
+        private ServiceSecretary GetRequiredSecretary(int secretaryId)
+        {
+            if (secretaryId <= 0)
+                throw new DomainException("ID de secretario inválido");
+
+            var secretary = _serviceSecretaries.FirstOrDefault(x => x.SecretaryId == secretaryId);
+            if (secretary == null)
+                throw new DomainException("El secretario no pertenece a este servicio.");
+
+            return secretary;
+        }
+
         private static void ValidateString(string value, string fieldName)
         {
             if (string.IsNullOrWhiteSpace(value))

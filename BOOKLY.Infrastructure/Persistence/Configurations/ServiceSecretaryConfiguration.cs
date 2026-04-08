@@ -1,4 +1,3 @@
-﻿using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +18,11 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.SecretaryId)
                    .HasColumnName("secretary_id");
+
+            builder.Property<string>("PermissionsData")
+                .HasColumnName("permissions")
+                .HasColumnType("nvarchar(max)")
+                .HasDefaultValue("[]");
 
             // FK a User (secretary) - restrict (no cascada)
             builder.HasOne<User>()
