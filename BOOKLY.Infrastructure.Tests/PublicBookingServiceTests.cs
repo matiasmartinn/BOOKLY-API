@@ -208,6 +208,7 @@ public sealed class PublicBookingServiceTests
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task AddOne(Service service, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(Service service) => throw new NotImplementedException();
@@ -232,6 +233,9 @@ public sealed class PublicBookingServiceTests
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
 
+        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
+            => Task.FromResult(new List<Appointment>());
+
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyCollection<Appointment>> SearchByServices(IReadOnlyCollection<int> serviceIds, DateOnly? from, DateOnly? to, AppointmentStatus? status, string? clientSearch, string? clientEmail, bool orderDescending, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByServices(IReadOnlyCollection<int> serviceIds, DateOnly from, DateOnly to, int? secretaryId = null, CancellationToken ct = default) => throw new NotImplementedException();
@@ -250,7 +254,7 @@ public sealed class PublicBookingServiceTests
     {
         private readonly User _owner = User.CreateOwner(
             PersonName.Create("Ada", "Lovelace"),
-            Email.Create("ada@example.com"),
+            BOOKLY.Domain.SharedKernel.Email.Create("ada@example.com"),
             Password.FromHash("hashed-password"),
             ReferenceNow);
 

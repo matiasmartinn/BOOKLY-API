@@ -7,7 +7,6 @@ namespace BOOKLY.Application.Interfaces
     public interface IUserService
     {
         Task<Result<UserDto>> GetUserById(int id, CancellationToken ct = default);
-        Task<Result<UserDto>> Login(LoginDto dto, CancellationToken ct = default);
         Task<Result<RegisterOwnerResultDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default);
         Task<Result> ConfirmEmail(ConfirmEmailDto dto, CancellationToken ct = default);
         Task<Result<EmailDispatchResultDto>> ResendEmailConfirmation(ResendEmailConfirmationDto dto, CancellationToken ct = default);

@@ -87,11 +87,40 @@ public sealed class SubscriptionServiceTests
         Assert.True(repository.WasUpdated);
     }
 
-    private static SubscriptionService CreateService(FakeSubscriptionRepository repository, DateTime now)
+    [Fact]
+    public async Task ChangePlan_ToFree_ShouldIgnoreInactiveServicesWhenValidatingLimits()
+    {
+        var subscription = Subscription.CreatePaid(
+            1,
+            SubscriptionPlan.Pro(),
+            SubscriptionPeriod.Create(new DateOnly(2026, 3, 1), new DateOnly(2026, 4, 1)),
+            ArgentinaNow.AddMonths(-1));
+
+        var repository = new FakeSubscriptionRepository(subscription);
+        var service = CreateService(
+            repository,
+            ArgentinaNow,
+            new FakeServiceRepository(activeServiceCount: 1));
+
+        var result = await service.ChangePlan(new ChangePlanDto
+        {
+            OwnerId = 1,
+            TargetPlan = "free"
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Equal(PlanName.Free, repository.Subscription!.Plan.Name);
+    }
+
+    private static SubscriptionService CreateService(
+        FakeSubscriptionRepository repository,
+        DateTime now,
+        FakeServiceRepository? serviceRepository = null)
     {
         return new SubscriptionService(
             repository,
-            new FakeServiceRepository(),
+            serviceRepository ?? new FakeServiceRepository(),
             new StubDateTimeProvider(now),
             new FakeUnitOfWork(),
             CreateMapper());
@@ -138,11 +167,22 @@ public sealed class SubscriptionServiceTests
 
     private sealed class FakeServiceRepository : IServiceRepository
     {
+        private readonly int _activeServiceCount;
+        private readonly int _assignedSecretaryCount;
+
+        public FakeServiceRepository(int activeServiceCount = 0, int assignedSecretaryCount = 0)
+        {
+            _activeServiceCount = activeServiceCount;
+            _assignedSecretaryCount = assignedSecretaryCount;
+        }
+
         public Task<Service?> GetOne(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetBySlug(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceSchedule>());
         public Task<List<ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceUnavailability>());
         public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default) => Task.FromResult(new List<Service>());
@@ -151,7 +191,8 @@ public sealed class SubscriptionServiceTests
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => Task.FromResult(false);
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => Task.FromResult(false);
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(0);
-        public Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(0);
+        public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(_activeServiceCount);
+        public Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(_assignedSecretaryCount);
         public Task AddOne(Service service, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(Service service) { }
         public void Remove(Service service) { }

@@ -231,9 +231,10 @@ namespace BOOKLY.Application.Services.UserAggregate
             var token = tokenResult.Token!;
             var user = tokenResult.User!;
 
-            user.ChangePassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
+            user.SetPassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
             token.MarkAsUsed(_dateTimeProvider.NowArgentina());
 
+            await _userRepository.RevokeAllUserTokens(user.Id, ct);
             _userTokenRepository.Update(token);
             _userRepository.Update(user);
             await _unitOfWork.SaveChanges(ct);

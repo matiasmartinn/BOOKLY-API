@@ -6,6 +6,9 @@ namespace BOOKLY.Application.Services.AppointmentAggregate.DTOs
         public int ServiceId { get; init; }
         public string ServiceName { get; init; } = null!;
         public int? AssignedSecretaryId { get; init; }
+        public int? CreatedByUserId { get; init; }
+        public string? CreatedByUserDisplayName { get; init; }
+        public string? CreatedByUserRole { get; init; }
         public string ClientName { get; init; } = null!;
         public string ClientPhone { get; init; } = null!;
         public string ClientEmail { get; init; } = null!;

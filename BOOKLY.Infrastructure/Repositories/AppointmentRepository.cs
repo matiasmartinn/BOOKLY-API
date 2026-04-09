@@ -209,6 +209,26 @@ namespace BOOKLY.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
+        public async Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(
+            int serviceId,
+            DateOnly from,
+            DateOnly to,
+            DateTime now,
+            CancellationToken ct = default)
+        {
+            var start = from.ToDateTime(TimeOnly.MinValue);
+            var end = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+            return await dbContext.Appointments
+                .Where(a => a.ServiceId == serviceId
+                         && a.Status == AppointmentStatus.Pending
+                         && a.StartDateTime > now
+                         && a.EndDateTime > start
+                         && a.StartDateTime < end)
+                .OrderBy(a => a.StartDateTime)
+                .ToListAsync(ct);
+        }
+
         private IQueryable<Appointment> BuildMetricsQuery(
             IReadOnlyCollection<int> serviceIds,
             DateOnly from,

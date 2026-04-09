@@ -7,6 +7,12 @@ namespace BOOKLY.Domain.Interfaces
     {
         Task<IReadOnlyCollection<Appointment>> GetByServiceAndDate(int serviceId, DateOnly date, CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default);
+        Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(
+            int serviceId,
+            DateOnly from,
+            DateOnly to,
+            DateTime now,
+            CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> SearchByServices(
             IReadOnlyCollection<int> serviceIds,

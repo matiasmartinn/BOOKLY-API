@@ -2,6 +2,7 @@ using BOOKLY.Application.EventHandler;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure;

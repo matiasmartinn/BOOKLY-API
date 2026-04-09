@@ -1,6 +1,8 @@
+using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers
@@ -16,6 +18,7 @@ namespace BOOKLY.Api.Controllers
             _userService = userService;
         }
 
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("invite")]
         [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -28,6 +31,7 @@ namespace BOOKLY.Api.Controllers
                 : HandleResult(result);
         }
 
+        [AllowAnonymous]
         [HttpPost("complete-invitation")]
         [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

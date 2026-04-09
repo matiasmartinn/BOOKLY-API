@@ -258,7 +258,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 .AsReadOnly();
         }
 
-        public void AddUnavailability(DateRange dateRange, TimeRange? timeRange, string? reason)
+        public ServiceUnavailability AddUnavailability(DateRange dateRange, TimeRange? timeRange, string? reason)
         {
             var newUnavailability = ServiceUnavailability.Create(dateRange, timeRange, reason);
 
@@ -266,6 +266,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 throw new DomainException("Ya existe una inhabilitación que se superpone con el rango indicado.");
 
             _serviceUnavailability.Add(newUnavailability);
+            return newUnavailability;
         }
 
         public void RemoveUnavailability(int unavailabilityId)

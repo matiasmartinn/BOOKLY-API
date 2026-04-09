@@ -1,5 +1,9 @@
-﻿using BOOKLY.Application.Common.Models;
+using BOOKLY.Application.Common.Models;
+using BOOKLY.Application.Common.Security;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace BOOKLY.Api.Controllers
 {
@@ -26,6 +30,57 @@ namespace BOOKLY.Api.Controllers
                 return CreatedAtAction(actionName, routeValues, result.Data);
 
             return MapError(result.Error!);
+        }
+
+        protected Result<int> GetAuthenticatedUserId()
+        {
+            var rawUserId =
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ??
+                User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(rawUserId, out var userId) || userId <= 0)
+                return Result<int>.Failure(Error.Unauthorized("El token no contiene un usuario válido."));
+
+            return Result<int>.Success(userId);
+        }
+
+        protected Result<UserRole> GetAuthenticatedUserRole()
+        {
+            var role = User.FindFirstValue(ClaimTypes.Role);
+
+            return role switch
+            {
+                Roles.Admin => Result<UserRole>.Success(UserRole.Admin),
+                Roles.Owner => Result<UserRole>.Success(UserRole.Owner),
+                Roles.Secretary => Result<UserRole>.Success(UserRole.Secretary),
+                _ => Result<UserRole>.Failure(Error.Unauthorized("El token no contiene un rol válido."))
+            };
+        }
+
+        protected Result EnsureOwnerAccess(int ownerId)
+        {
+            var userIdResult = GetAuthenticatedUserId();
+            if (userIdResult.IsFailure)
+                return Result.Failure(userIdResult.Error);
+
+            if (User.IsInRole(Roles.Admin))
+                return Result.Success();
+
+            return User.IsInRole(Roles.Owner) && userIdResult.Data == ownerId
+                ? Result.Success()
+                : Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este owner."));
+        }
+
+        protected Result EnsureSelfOrAdmin(int userId)
+        {
+            var currentUserIdResult = GetAuthenticatedUserId();
+            if (currentUserIdResult.IsFailure)
+                return Result.Failure(currentUserIdResult.Error);
+
+            if (User.IsInRole(Roles.Admin) || currentUserIdResult.Data == userId)
+                return Result.Success();
+
+            return Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario."));
         }
 
         private IActionResult MapError(Error error) => error.Type switch

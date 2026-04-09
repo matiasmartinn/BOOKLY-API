@@ -98,9 +98,7 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
         }
 
         public void ChangePassword(Password password)
-        {
-            Password = password;
-        }
+            => SetPassword(password);
 
         public void ChangeEmail(Email email)
         {
@@ -130,17 +128,22 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
             if (Status != UserStatus.PendingInvitationAcceptance)
                 throw new DomainException("La invitación ya fue completada o no se encuentra pendiente.");
 
-            Password = password;
             EmailConfirmed = true;
-            Status = ResolveStatus();
+            SetPassword(password);
         }
 
         public bool VerifyPassword(string plainPassword, IPasswordHasher hasher)
         {
-            if (Password is null)
+            if (Password is null || string.IsNullOrWhiteSpace(plainPassword))
                 return false;
 
             return hasher.Verify(plainPassword, Password.Hash);
+        }
+
+        public void SetPassword(Password password)
+        {
+            Password = password ?? throw new DomainException("La contraseña es requerida.");
+            Status = ResolveStatus();
         }
 
         public void Deactivate()

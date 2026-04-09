@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Mail;
+using BOOKLY.Application.Common;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
 using Microsoft.Extensions.Options;

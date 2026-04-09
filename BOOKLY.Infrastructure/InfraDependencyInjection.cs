@@ -1,3 +1,8 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using BOOKLY.Application.Common;
+using BOOKLY.Application.Interfaces;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Repositories;
 using BOOKLY.Infrastructure.Email;
@@ -6,10 +11,12 @@ using BOOKLY.Infrastructure.Persistence.Repositories;
 using BOOKLY.Infrastructure.Repositories;
 using BOOKLY.Infrastructure.Security;
 using BOOKLY.Infrastructure.Time;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace BOOKLY.Infrastructure
 {
@@ -22,6 +29,18 @@ namespace BOOKLY.Infrastructure
             var connectionString = configuration.GetConnectionString("BooklyDb")
                 ?? throw new InvalidOperationException("Connection string 'BooklyDb' no encontrada.");
             var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);
+            var jwtSettings = new JwtSettings
+            {
+                Issuer = configuration[$"{JwtSettings.SectionName}:Issuer"] ?? string.Empty,
+                Audience = configuration[$"{JwtSettings.SectionName}:Audience"] ?? string.Empty,
+                SecretKey = configuration[$"{JwtSettings.SectionName}:SecretKey"] ?? string.Empty,
+                AccessTokenExpirationMinutes = int.TryParse(
+                    configuration[$"{JwtSettings.SectionName}:AccessTokenExpirationMinutes"],
+                    out var expirationMinutes)
+                    ? expirationMinutes
+                    : 0
+            };
+            jwtSettings.Validate();
 
             services.AddDbContext<BooklyDbContext>(options =>
             {
@@ -59,6 +78,30 @@ namespace BOOKLY.Infrastructure
 
             services.AddSingleton(Options.Create(emailOptions));
             services.AddSingleton(Options.Create(frontendOptions));
+            services.AddSingleton(Options.Create(jwtSettings));
+
+            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey));
+
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.MapInboundClaims = false;
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidIssuer = jwtSettings.Issuer,
+                        ValidateAudience = true,
+                        ValidAudience = jwtSettings.Audience,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = signingKey,
+                        ClockSkew = TimeSpan.Zero,
+                        NameClaimType = JwtRegisteredClaimNames.Email,
+                        RoleClaimType = ClaimTypes.Role
+                    };
+                });
+
+            services.AddAuthorization();
 
             services.AddScoped<IServiceRepository, ServiceRepository>();
             services.AddScoped<IAdminRepository, AdminRepository>();
@@ -68,6 +111,7 @@ namespace BOOKLY.Infrastructure
             services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IDateTimeProvider, DateTimeProvider>();
             services.AddScoped<IInvitationTokenGenerator, InvitationTokenGenerator>();
+            services.AddScoped<IJwtTokenService, JwtTokenService>();
             services.AddScoped<IUserTokenRepository, UserInvitationRepository>();
             services.AddScoped<IEmailService, SmtpEmailService>();
 

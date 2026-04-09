@@ -9,15 +9,16 @@ using BOOKLY.Application.Common;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.DomainServices;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
-using BOOKLY.Infrastructure.Email;
 using Microsoft.Extensions.Options;
 
 namespace BOOKLY.Application.Services.ServiceAggregate
@@ -32,6 +33,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
         private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IServiceAuthorizationService _authorizationService;
+        private readonly IAppointmentCancellationNotificationService _appointmentCancellationNotificationService;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
         private readonly FrontendOptions _frontendOptions;
@@ -45,6 +47,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             ISubscriptionRepository subscriptionRepository,
             IDateTimeProvider dateTimeProvider,
             IServiceAuthorizationService authorizationService,
+            IAppointmentCancellationNotificationService appointmentCancellationNotificationService,
             IMapper mapper,
             IUnitOfWork unitOfWork,
             IOptions<FrontendOptions> frontendOptions
@@ -58,6 +61,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             _subscriptionRepository = subscriptionRepository;
             _dateTimeProvider = dateTimeProvider;
             _authorizationService = authorizationService;
+            _appointmentCancellationNotificationService = appointmentCancellationNotificationService;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
             _frontendOptions = frontendOptions.Value;
@@ -90,12 +94,24 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (owner == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Usuario"));
 
+            if (owner.Role != UserRole.Owner)
+                return Result<ServiceDto>.Failure(Error.Validation("El usuario indicado no es un owner válido."));
+
+            try
+            {
+                owner.EnsureCanLogin();
+            }
+            catch (DomainException)
+            {
+                return Result<ServiceDto>.Failure(Error.Validation("El owner debe estar habilitado para crear servicios."));
+            }
+
             var serviceType = await _serviceTypeRepository.GetByIdWithFields(dto.ServiceTypeId, ct);
             if (serviceType == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("TipoServicio"));
 
             var subscription = await GetEffectiveSubscription(dto.OwnerId, ct);
-            var currentServices = await _serviceRepository.CountByOwnerId(dto.OwnerId, ct);
+            var currentServices = await _serviceRepository.CountActiveByOwnerId(dto.OwnerId, ct);
 
             subscription.EnsureCanCreateService(currentServices);
             EnsureExtraFieldsAllowed(subscription, serviceType);
@@ -394,6 +410,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
+            var now = _dateTimeProvider.NowArgentina();
             var hasOnlyOneTime = dto.StartTime.HasValue != dto.EndTime.HasValue;
             if (hasOnlyOneTime)
                 return Result.Failure(Error.Validation("Debe indicar hora de inicio y fin, o ninguna."));
@@ -404,10 +421,42 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
                 : null;
 
-            service.AddUnavailability(dateRange, timeRange, dto.Reason);
+            var createdUnavailability = service.AddUnavailability(dateRange, timeRange, dto.Reason);
+            var cancelledAppointments = new List<Appointment>();
+
+            if (ShouldCancelAffectedAppointments(dto))
+            {
+                var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRangeForUpdate(
+                    service.Id,
+                    dateRange.Start,
+                    dateRange.End,
+                    now,
+                    ct);
+
+                var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
+                var actorUserId = NormalizeActorUserId(dto.UserId);
+
+                foreach (var appointment in candidateAppointments)
+                {
+                    if (!IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
+                        continue;
+
+                    appointment.MarkAsCancel(cancellationReason, now, actorUserId);
+                    cancelledAppointments.Add(appointment);
+                }
+            }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
+
+            foreach (var appointment in cancelledAppointments)
+            {
+                await _appointmentCancellationNotificationService.NotifyAppointmentCancelled(
+                    service,
+                    appointment,
+                    notifyOwner: false,
+                    ct);
+            }
 
             return Result.Success();
         }
@@ -525,6 +574,35 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 currentUserRole,
                 SecretaryPermission.ManageSchedules);
         }
+
+        private static bool IsAppointmentAffectedByUnavailability(
+            Appointment appointment,
+            ServiceUnavailability unavailability)
+        {
+            var appointmentDate = DateOnly.FromDateTime(appointment.StartDateTime);
+            var appointmentRange = TimeRange.Create(
+                TimeOnly.FromDateTime(appointment.StartDateTime),
+                TimeOnly.FromDateTime(appointment.EndDateTime));
+
+            return unavailability.BlocksRange(appointmentDate, appointmentRange);
+        }
+
+        private static string BuildUnavailabilityCancellationReason(string? unavailabilityReason)
+        {
+            var normalizedReason = string.IsNullOrWhiteSpace(unavailabilityReason)
+                ? null
+                : unavailabilityReason.Trim();
+
+            return normalizedReason is null
+                ? "Cancelado por excepcion de agenda del servicio"
+                : $"Cancelado por excepcion de agenda: {normalizedReason}";
+        }
+
+        private static int? NormalizeActorUserId(int? userId)
+            => userId.HasValue && userId.Value > 0 ? userId.Value : null;
+
+        private static bool ShouldCancelAffectedAppointments(CreateUnavailabilityDto dto)
+            => dto.CancelAffectedAppointments ?? true;
 
         private async Task<string> GenerateUniqueSlugAsync(string source, int? excludedServiceId, CancellationToken ct)
         {

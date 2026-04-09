@@ -32,6 +32,7 @@ namespace BOOKLY.Infrastructure.Persistence
         public DbSet<ServiceTypeFieldOption> ServiceTypeFieldOptions => Set<ServiceTypeFieldOption>();
         public DbSet<AppointmentStatusHistory> AppointmentStatusHistories => Set<AppointmentStatusHistory>();
         public DbSet<UserToken> UserTokens => Set<UserToken>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

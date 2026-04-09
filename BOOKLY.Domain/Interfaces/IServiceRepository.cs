@@ -20,6 +20,7 @@ namespace BOOKLY.Domain.Interfaces
         Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default);
         Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default);
         Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default);
+        Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default);
         Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default);
         Task AddOne(Service service, CancellationToken ct = default);
         void Update(Service service);

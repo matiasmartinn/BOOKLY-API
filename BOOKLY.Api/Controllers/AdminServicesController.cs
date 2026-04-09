@@ -1,10 +1,13 @@
+using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AdminAggregate.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
+    [Authorize(Roles = Roles.Admin)]
     [Route("api/admin/services")]
     public sealed class AdminServicesController : BaseController
     {

@@ -11,5 +11,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         public TimeOnly? StartTime { get; init; }
         public TimeOnly? EndTime { get; init; }
         public string? Reason { get; init; }
+        public bool? CancelAffectedAppointments { get; init; }
+        public int? UserId { get; init; }
     }
 }

@@ -13,20 +13,15 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
-                "http://localhost:5173",   // Vite
-                "http://localhost:3000"   // React clásico
-            )
+                "http://localhost:5173",
+                "http://localhost:3000")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
 });
 
-
-
-// Add services to the container
 builder.Services.AddControllers();
 
-// Register ProblemDetails
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -35,20 +30,14 @@ builder.Services.AddSwaggerGen(options =>
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
 });
 
-// Infrastructure Layer (DbContext + Repositories)
 builder.Services.AddInfrastructure(builder.Configuration);
-
-// Application Layer (AutoMapper + Application Services)
 builder.Services.AddApplicationServices();
-
-// Domain Layer
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 
 var app = builder.Build();
 
 app.UseExceptionHandling();
 
-// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -56,9 +45,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors(FrontendPolicy);
-
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

@@ -1,5 +1,8 @@
+using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services.AuthAggregate.DTOs;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers
@@ -8,21 +11,49 @@ namespace BOOKLY.Api.Controllers
     [Route("api/auth")]
     public class AuthController : BaseController
     {
+        private readonly IAuthService _authService;
         private readonly IUserService _userService;
 
-        public AuthController(IUserService userService)
+        public AuthController(
+            IAuthService authService,
+            IUserService userService)
         {
+            _authService = authService;
             _userService = userService;
         }
 
+        [AllowAnonymous]
         [HttpPost("login")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Login([FromBody] LoginDto dto, CancellationToken ct)
+        public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
         {
-            return HandleResult(await _userService.Login(dto, ct));
+            return HandleResult(await _authService.Login(request, ct));
         }
 
+        [AllowAnonymous]
+        [HttpPost("refresh")]
+        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> Refresh([FromBody] RefreshRequest request, CancellationToken ct)
+        {
+            return HandleResult(await _authService.Refresh(request, ct));
+        }
+
+        [Authorize]
+        [HttpPost("logout")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> Logout([FromBody] RefreshRequest request, CancellationToken ct)
+        {
+            var currentUserId = GetAuthenticatedUserId();
+            if (currentUserId.IsFailure)
+                return HandleResult(Result.Failure(currentUserId.Error));
+
+            return HandleResult(await _authService.Logout(currentUserId.Data, request.RefreshToken, ct));
+        }
+
+        [AllowAnonymous]
         [HttpPost("register")]
         [ProducesResponseType(typeof(RegisterOwnerResultDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -35,6 +66,7 @@ namespace BOOKLY.Api.Controllers
                 : HandleResult(result);
         }
 
+        [AllowAnonymous]
         [HttpPost("confirm-email")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -44,6 +76,7 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _userService.ConfirmEmail(dto, ct));
         }
 
+        [AllowAnonymous]
         [HttpPost("resend-confirmation")]
         [ProducesResponseType(typeof(EmailDispatchResultDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResendConfirmation([FromBody] ResendEmailConfirmationDto dto, CancellationToken ct)
@@ -51,6 +84,7 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _userService.ResendEmailConfirmation(dto, ct));
         }
 
+        [AllowAnonymous]
         [HttpPost("forgot-password")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> ForgotPassword([FromBody] RequestPasswordResetDto dto, CancellationToken ct)
@@ -58,6 +92,7 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _userService.RequestPasswordReset(dto, ct));
         }
 
+        [AllowAnonymous]
         [HttpPost("reset-password")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -67,6 +102,7 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _userService.ResetPassword(dto, ct));
         }
 
+        [AllowAnonymous]
         [HttpPost("secretary-invitations/complete")]
         [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

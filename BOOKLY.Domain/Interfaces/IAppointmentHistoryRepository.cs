@@ -7,5 +7,8 @@ namespace BOOKLY.Domain.Interfaces
         Task AddOne(AppointmentStatusHistory history, CancellationToken ct = default);
         Task<List<AppointmentStatusHistory>> GetByAppointment(int appointmentId, CancellationToken ct = default);
         Task<List<AppointmentStatusHistory>> GetByService(int serviceId, CancellationToken ct = default);
+        Task<List<AppointmentStatusHistory>> GetCreationEntriesByAppointments(
+            IReadOnlyCollection<int> appointmentIds,
+            CancellationToken ct = default);
     }
 }

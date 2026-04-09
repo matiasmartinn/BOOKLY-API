@@ -113,6 +113,13 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .CountAsync(s => s.OwnerId == ownerId, ct);
         }
 
+        public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .AsNoTracking()
+                .CountAsync(s => s.OwnerId == ownerId && s.IsActive, ct);
+        }
+
         public async Task<int> CountAssignedSecretariesByOwnerId(int ownerId, CancellationToken ct = default)
         {
             return await (

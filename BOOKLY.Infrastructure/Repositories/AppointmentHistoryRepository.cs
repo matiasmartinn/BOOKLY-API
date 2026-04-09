@@ -31,5 +31,20 @@ namespace BOOKLY.Infrastructure.Repositories
                 .AsNoTracking()
                 .ToListAsync(ct);
         }
+
+        public async Task<List<AppointmentStatusHistory>> GetCreationEntriesByAppointments(
+            IReadOnlyCollection<int> appointmentIds,
+            CancellationToken ct = default)
+        {
+            if (appointmentIds.Count == 0)
+                return [];
+
+            return await dbContext.AppointmentStatusHistories
+                .Include(h => h.User)
+                .Where(h => appointmentIds.Contains(h.AppointmentId) && h.OldStatus == null)
+                .OrderBy(h => h.OccurredOn)
+                .AsNoTracking()
+                .ToListAsync(ct);
+        }
     }
 }

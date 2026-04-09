@@ -483,6 +483,54 @@ namespace BOOKLY.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("refresh_token_id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsRevoked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_revoked");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)")
+                        .HasColumnName("token");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_refresh_tokens_expires_at");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ux_refresh_tokens_token");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_refresh_tokens_user_id");
+
+                    b.ToTable("RefreshTokens", (string)null);
+                });
+
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1137,6 +1185,15 @@ namespace BOOKLY.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.RefreshToken", b =>
+                {
+                    b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.User", b =>
                 {
                     b.OwnsOne("BOOKLY.Domain.SharedKernel.Email", "Email", b1 =>
@@ -1168,6 +1225,7 @@ namespace BOOKLY.Infrastructure.Migrations
                                 .HasColumnType("int");
 
                             b1.Property<string>("Hash")
+                                .IsRequired()
                                 .HasMaxLength(128)
                                 .HasColumnType("nvarchar(128)")
                                 .HasColumnName("password_hash");

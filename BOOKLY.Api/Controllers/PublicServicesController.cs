@@ -1,11 +1,13 @@
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.PublicBooking.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
+    [AllowAnonymous]
     [Route("api/public/services")]
     public sealed class PublicServicesController : BaseController
     {
