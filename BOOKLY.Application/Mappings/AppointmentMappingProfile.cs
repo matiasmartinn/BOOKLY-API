@@ -35,6 +35,10 @@ namespace BOOKLY.Application.Mappings
             CreateMap<Appointment, AppointmentSummaryDto>()
                 .ForMember(d => d.ClientName,
                     opt => opt.MapFrom(s => s.Client.ClientName))
+                .ForMember(d => d.ClientPhone, 
+                    opt => opt.MapFrom(s => s.Client.Phone))
+                .ForMember(d => d.ClientNotes,
+                    opt => opt.MapFrom(s => s.ClientNotes))
                 .ForMember(d => d.Status,
                     opt => opt.MapFrom(s => s.Status));
 
