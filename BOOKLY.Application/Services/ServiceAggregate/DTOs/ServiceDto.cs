@@ -7,6 +7,7 @@
         public int OwnerId { get; init; }
         public string Slug { get; init; } = null!;
         public string? Description { get; init; }
+        public string? PhoneNumber { get; init; }
         public string? PlaceName { get; init; }
         public string? Address { get; init; }
         public string? GoogleMapsUrl { get; init; }
@@ -18,8 +19,8 @@
         public bool IsActive { get; init; }
         public decimal? Price { get; init; }
         public bool IsPublicBookingEnabled { get; init; }
-        public string PublicBookingToken { get; init; } = null!;
-        public DateTime? PublicBookingTokenUpdateAt { get; init; }
+        public string PublicBookingCode { get; init; } = null!;
+        public DateTime? PublicBookingCodeUpdatedAt { get; init; }
 
         public List<int?> SecretaryIds { get; init; } = new();
         public List<ServiceSecretaryPermissionsDto> SecretaryPermissions { get; init; } = new();

@@ -31,6 +31,10 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("description")
                    .HasMaxLength(500);
 
+            builder.Property(x => x.PhoneNumber)
+                   .HasColumnName("phone_number")
+                   .HasMaxLength(50);
+
             builder.OwnsOne(x => x.Location, location =>
             {
                 location.Property(x => x.PlaceName)
@@ -57,13 +61,13 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasDefaultValue(true)
                    .IsRequired();
 
-            builder.Property(x => x.PublicBookingToken)
-                   .HasColumnName("public_booking_token")
-                   .HasMaxLength(64)
+            builder.Property(x => x.PublicBookingCode)
+                   .HasColumnName("public_booking_code")
+                   .HasMaxLength(8)
                    .IsRequired();
 
-            builder.Property(x => x.PublicBookingTokenUpdateAt)
-                   .HasColumnName("public_booking_token_update_at")
+            builder.Property(x => x.PublicBookingCodeUpdatedAt)
+                   .HasColumnName("public_booking_code_updated_at")
                    .HasColumnType("datetime2");
 
             builder.Property(x => x.Price)
@@ -87,9 +91,9 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.HasIndex(x => x.OwnerId)
                    .HasDatabaseName("ix_services_owner_id");
 
-            builder.HasIndex(x => x.PublicBookingToken)
+            builder.HasIndex(x => x.PublicBookingCode)
                    .IsUnique()
-                   .HasDatabaseName("ux_services_public_booking_token");
+                   .HasDatabaseName("ux_services_public_booking_code");
 
             builder.HasIndex(x => x.ServiceTypeId)
                    .HasDatabaseName("ix_services_service_type_id");

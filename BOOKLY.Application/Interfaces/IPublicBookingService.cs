@@ -6,9 +6,9 @@ namespace BOOKLY.Application.Interfaces
 {
     public interface IPublicBookingService
     {
-        Task<Result<PublicServiceBookingDto>> GetService(string slug, string token, CancellationToken ct = default);
-        Task<Result<List<DateOnly>>> GetAvailableDates(string slug, string token, DateOnly? from, DateOnly? to, CancellationToken ct = default);
-        Task<Result<List<DateTime>>> GetAvailableSlots(string slug, string token, DateOnly date, CancellationToken ct = default);
-        Task<Result<AppointmentDto>> CreateAppointment(string slug, string token, PublicCreateAppointmentDto dto, CancellationToken ct = default);
+        Task<Result<PublicServiceBookingDto>> GetService(string slug, string code, CancellationToken ct = default);
+        Task<Result<List<DateOnly>>> GetAvailableDates(string slug, string code, DateOnly? from, DateOnly? to, CancellationToken ct = default);
+        Task<Result<List<DateTime>>> GetAvailableSlots(string slug, string code, DateOnly date, CancellationToken ct = default);
+        Task<Result<AppointmentDto>> CreateAppointment(string slug, string code, PublicCreateAppointmentDto dto, CancellationToken ct = default);
     }
 }

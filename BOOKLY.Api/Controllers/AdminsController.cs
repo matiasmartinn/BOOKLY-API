@@ -20,14 +20,14 @@ namespace BOOKLY.Api.Controllers
 
         [Authorize(Roles = Roles.Admin)]
         [HttpPost("invite")]
-        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(UserEmailDispatchResultDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Invite([FromBody] InviteAdminDto dto, CancellationToken ct)
         {
             var result = await _userService.InviteAdmin(dto, ct);
             return result.IsSuccess
-                ? CreatedAtAction(nameof(UsersController.GetById), "Users", new { id = result.Data?.Id }, result.Data)
+                ? CreatedAtAction(nameof(UsersController.GetById), "Users", new { id = result.Data?.User.Id }, result.Data)
                 : HandleResult(result);
         }
 

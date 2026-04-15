@@ -1,4 +1,5 @@
 using AutoMapper;
+using BOOKLY.Application.Common;
 using BOOKLY.Application.EventHandler;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;

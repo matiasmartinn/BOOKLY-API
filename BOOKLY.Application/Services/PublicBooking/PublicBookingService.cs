@@ -41,9 +41,9 @@ namespace BOOKLY.Application.Services.PublicBooking
             _dateTimeProvider = dateTimeProvider;
         }
 
-        public async Task<Result<PublicServiceBookingDto>> GetService(string slug, string token, CancellationToken ct = default)
+        public async Task<Result<PublicServiceBookingDto>> GetService(string slug, string code, CancellationToken ct = default)
         {
-            var serviceResult = await ResolvePublicService(slug, token, ct);
+            var serviceResult = await ResolvePublicService(slug, code, ct);
             if (serviceResult.IsFailure)
                 return Result<PublicServiceBookingDto>.Failure(serviceResult.Error);
 
@@ -59,12 +59,12 @@ namespace BOOKLY.Application.Services.PublicBooking
 
         public async Task<Result<List<DateOnly>>> GetAvailableDates(
             string slug,
-            string token,
+            string code,
             DateOnly? from,
             DateOnly? to,
             CancellationToken ct = default)
         {
-            var serviceResult = await ResolvePublicServiceWithAvailability(slug, token, ct);
+            var serviceResult = await ResolvePublicServiceWithAvailability(slug, code, ct);
             if (serviceResult.IsFailure)
                 return Result<List<DateOnly>>.Failure(serviceResult.Error);
 
@@ -84,11 +84,11 @@ namespace BOOKLY.Application.Services.PublicBooking
 
         public async Task<Result<List<DateTime>>> GetAvailableSlots(
             string slug,
-            string token,
+            string code,
             DateOnly date,
             CancellationToken ct = default)
         {
-            var serviceResult = await ResolvePublicServiceWithAvailability(slug, token, ct);
+            var serviceResult = await ResolvePublicServiceWithAvailability(slug, code, ct);
             if (serviceResult.IsFailure)
                 return Result<List<DateTime>>.Failure(serviceResult.Error);
 
@@ -101,11 +101,11 @@ namespace BOOKLY.Application.Services.PublicBooking
 
         public async Task<Result<AppointmentDto>> CreateAppointment(
             string slug,
-            string token,
+            string code,
             PublicCreateAppointmentDto dto,
             CancellationToken ct = default)
         {
-            var serviceResult = await ResolvePublicService(slug, token, ct);
+            var serviceResult = await ResolvePublicService(slug, code, ct);
             if (serviceResult.IsFailure)
                 return Result<AppointmentDto>.Failure(serviceResult.Error);
 
@@ -131,21 +131,21 @@ namespace BOOKLY.Application.Services.PublicBooking
             return await _appointmentService.CreateAppointment(createAppointmentDto, ct);
         }
 
-        private async Task<Result<Service>> ResolvePublicService(string slug, string token, CancellationToken ct)
+        private async Task<Result<Service>> ResolvePublicService(string slug, string code, CancellationToken ct)
         {
-            var service = await _serviceRepository.GetBySlug(slug, ct);
-            return ValidatePublicAccess(service, slug, token);
+            var service = await _serviceRepository.GetBySlugAndPublicBookingCode(slug, code, ct);
+            return ValidatePublicAccess(service);
         }
 
-        private async Task<Result<Service>> ResolvePublicServiceWithAvailability(string slug, string token, CancellationToken ct)
+        private async Task<Result<Service>> ResolvePublicServiceWithAvailability(string slug, string code, CancellationToken ct)
         {
-            var service = await _serviceRepository.GetBySlugWithSchedulesAndUnavailability(slug, ct);
-            return ValidatePublicAccess(service, slug, token);
+            var service = await _serviceRepository.GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(slug, code, ct);
+            return ValidatePublicAccess(service);
         }
 
-        private static Result<Service> ValidatePublicAccess(Service? service, string slug, string token)
+        private static Result<Service> ValidatePublicAccess(Service? service)
         {
-            if (service == null || !service.MatchesPublicBookingAccess(slug, token))
+            if (service == null)
                 return Result<Service>.Failure(InvalidPublicAccessError);
 
             if (!service.IsActive)
@@ -171,6 +171,7 @@ namespace BOOKLY.Application.Services.PublicBooking
                     ? null
                     : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}".Trim(),
                 Description = service.Description,
+                PhoneNumber = service.PhoneNumber,
                 PlaceName = service.Location?.PlaceName,
                 Address = service.Location?.Address,
                 GoogleMapsUrl = service.Location?.GoogleMapsUrl,

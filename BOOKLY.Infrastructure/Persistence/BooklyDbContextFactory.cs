@@ -2,7 +2,7 @@ using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace BOOKLY.Infrastructure.Persistence
 {
@@ -11,7 +11,14 @@ namespace BOOKLY.Infrastructure.Persistence
         public BooklyDbContext CreateDbContext(string[] args)
         {
             var connectionString = ResolveConnectionString()
-                ?? throw new InvalidOperationException("Connection string 'BooklyDb' no encontrada para diseÃ±o.");
+                ?? throw new InvalidOperationException("La configuración ConnectionStrings:BooklyDb es requerida para diseño.");
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "La configuración ConnectionStrings:BooklyDb es requerida para diseño. Configúrala en appsettings.json o appsettings.Development.json.");
+            }
+
             var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);
 
             var optionsBuilder = new DbContextOptionsBuilder<BooklyDbContext>();
@@ -22,25 +29,17 @@ namespace BOOKLY.Infrastructure.Persistence
 
         private static string? ResolveConnectionString()
         {
-            var fromEnvironment = Environment.GetEnvironmentVariable("ConnectionStrings__BooklyDb");
-            if (!string.IsNullOrWhiteSpace(fromEnvironment))
-                return fromEnvironment;
-
             var basePath = ResolveConfigurationBasePath();
-            var booklyApiSettings = Path.Combine(basePath, "BOOKLY.Api", "appsettings.json");
-            var rootSettings = Path.Combine(basePath, "appsettings.json");
-            var settingsPath = File.Exists(booklyApiSettings) ? booklyApiSettings : rootSettings;
 
-            using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(basePath)
+                .AddJsonFile(Path.Combine("BOOKLY.Api", "appsettings.json"), optional: true)
+                .AddJsonFile(Path.Combine("BOOKLY.Api", "appsettings.Development.json"), optional: true)
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddJsonFile("appsettings.Development.json", optional: true)
+                .Build();
 
-            if (document.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
-                && connectionStrings.TryGetProperty("BooklyDb", out var booklyDb)
-                && booklyDb.ValueKind == JsonValueKind.String)
-            {
-                return booklyDb.GetString();
-            }
-
-            return null;
+            return configuration.GetConnectionString("BooklyDb");
         }
 
         private static string ResolveConfigurationBasePath()

@@ -25,16 +25,22 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken ct)
         {
-            var access = EnsureSelfOrAdmin(id);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var currentUserId = GetAuthenticatedUserId();
+            if (currentUserId.IsFailure)
+                return HandleResult(Result.Failure(currentUserId.Error));
 
-            return HandleResult(await _userService.GetUserById(id, ct));
+            if (User.IsInRole(Roles.Admin) || currentUserId.Data == id)
+                return HandleResult(await _userService.GetUserById(id, ct));
+
+            if (User.IsInRole(Roles.Owner))
+                return HandleResult(await _userService.GetOwnerSecretaryById(currentUserId.Data, id, ct));
+
+            return HandleResult(Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario.")));
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
         [HttpPost("owners/{ownerId:int}/secretaries")]
-        [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(UserEmailDispatchResultDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -45,7 +51,7 @@ namespace BOOKLY.Api.Controllers
                 return HandleResult(access);
 
             var result = await _userService.CreateSecretary(ownerId, dto, ct);
-            return HandleCreated(result, nameof(GetById), new { id = result.Data?.Id });
+            return HandleCreated(result, nameof(GetById), new { id = result.Data?.User.Id });
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
@@ -68,7 +74,17 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> ActivateSecretary(int id, CancellationToken ct)
         {
-            return HandleResult(await _userService.ActivateSecretary(id, ct));
+            int? ownerId = null;
+            if (User.IsInRole(Roles.Owner))
+            {
+                var currentUserId = GetAuthenticatedUserId();
+                if (currentUserId.IsFailure)
+                    return HandleResult(Result.Failure(currentUserId.Error));
+
+                ownerId = currentUserId.Data;
+            }
+
+            return HandleResult(await _userService.ActivateSecretary(id, ownerId, ct));
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
@@ -77,7 +93,17 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeactivateSecretary(int id, CancellationToken ct)
         {
-            return HandleResult(await _userService.DeactivateSecretary(id, ct));
+            int? ownerId = null;
+            if (User.IsInRole(Roles.Owner))
+            {
+                var currentUserId = GetAuthenticatedUserId();
+                if (currentUserId.IsFailure)
+                    return HandleResult(Result.Failure(currentUserId.Error));
+
+                ownerId = currentUserId.Data;
+            }
+
+            return HandleResult(await _userService.DeactivateSecretary(id, ownerId, ct));
         }
 
         [HttpPut("{id:int}")]
@@ -86,11 +112,17 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto dto, CancellationToken ct)
         {
-            var access = EnsureSelfOrAdmin(id);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var currentUserId = GetAuthenticatedUserId();
+            if (currentUserId.IsFailure)
+                return HandleResult(Result.Failure(currentUserId.Error));
 
-            return HandleResult(await _userService.UpdateUser(id, dto, ct));
+            if (User.IsInRole(Roles.Admin) || currentUserId.Data == id)
+                return HandleResult(await _userService.UpdateUser(id, dto, ct));
+
+            if (User.IsInRole(Roles.Owner))
+                return HandleResult(await _userService.UpdateOwnerSecretary(currentUserId.Data, id, dto, ct));
+
+            return HandleResult(Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario.")));
         }
 
         [HttpDelete("{id:int}")]

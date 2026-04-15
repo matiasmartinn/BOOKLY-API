@@ -23,18 +23,18 @@ public sealed class PublicBookingServiceTests
     private static readonly DateTime ReferenceNow = new(2026, 4, 8, 10, 0, 0);
 
     [Fact]
-    public async Task AllPublicOperations_ShouldReturnSameNotFoundError_WhenTokenIsInvalid()
+    public async Task AllPublicOperations_ShouldReturnSameNotFoundError_WhenCodeIsInvalid()
     {
         var service = CreateService();
         var appointmentService = new FakeAppointmentService();
         var sut = CreateSut(service, appointmentService: appointmentService);
-        var invalidToken = "invalid-token";
+        var invalidCode = "invalid-code";
         var date = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
 
-        var detailResult = await sut.GetService(service.Slug.Value, invalidToken);
-        var datesResult = await sut.GetAvailableDates(service.Slug.Value, invalidToken, date, date.AddDays(7));
-        var slotsResult = await sut.GetAvailableSlots(service.Slug.Value, invalidToken, date);
-        var createResult = await sut.CreateAppointment(service.Slug.Value, invalidToken, CreateAppointmentRequest(date));
+        var detailResult = await sut.GetService(service.Slug.Value, invalidCode);
+        var datesResult = await sut.GetAvailableDates(service.Slug.Value, invalidCode, date, date.AddDays(7));
+        var slotsResult = await sut.GetAvailableSlots(service.Slug.Value, invalidCode, date);
+        var createResult = await sut.CreateAppointment(service.Slug.Value, invalidCode, CreateAppointmentRequest(date));
 
         AssertPublicError(detailResult.Error, ErrorType.NotFound, "Acceso publico invalido o inexistente.");
         AssertPublicError(datesResult.Error, ErrorType.NotFound, "Acceso publico invalido o inexistente.");
@@ -53,10 +53,10 @@ public sealed class PublicBookingServiceTests
         var sut = CreateSut(service, appointmentService: appointmentService);
         var date = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
 
-        var detailResult = await sut.GetService(service.Slug.Value, service.PublicBookingToken);
-        var datesResult = await sut.GetAvailableDates(service.Slug.Value, service.PublicBookingToken, date, date.AddDays(7));
-        var slotsResult = await sut.GetAvailableSlots(service.Slug.Value, service.PublicBookingToken, date);
-        var createResult = await sut.CreateAppointment(service.Slug.Value, service.PublicBookingToken, CreateAppointmentRequest(date));
+        var detailResult = await sut.GetService(service.Slug.Value, service.PublicBookingCode);
+        var datesResult = await sut.GetAvailableDates(service.Slug.Value, service.PublicBookingCode, date, date.AddDays(7));
+        var slotsResult = await sut.GetAvailableSlots(service.Slug.Value, service.PublicBookingCode, date);
+        var createResult = await sut.CreateAppointment(service.Slug.Value, service.PublicBookingCode, CreateAppointmentRequest(date));
 
         AssertPublicError(detailResult.Error, ErrorType.Conflict, "El acceso publico para este servicio esta deshabilitado.");
         AssertPublicError(datesResult.Error, ErrorType.Conflict, "El acceso publico para este servicio esta deshabilitado.");
@@ -97,7 +97,7 @@ public sealed class PublicBookingServiceTests
 
         var sut = CreateSut(service, appointmentService: appointmentService);
 
-        var result = await sut.CreateAppointment(service.Slug.Value, service.PublicBookingToken, appointmentRequest);
+        var result = await sut.CreateAppointment(service.Slug.Value, service.PublicBookingCode, appointmentRequest);
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
@@ -118,7 +118,7 @@ public sealed class PublicBookingServiceTests
         var service = CreateService();
         var sut = CreateSut(service);
 
-        var result = await sut.GetService(service.Slug.Value, service.PublicBookingToken);
+        var result = await sut.GetService(service.Slug.Value, service.PublicBookingCode);
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
@@ -195,17 +195,24 @@ public sealed class PublicBookingServiceTests
     {
         public Task<Service?> GetOne(int id, CancellationToken ct = default) => Task.FromResult(id == service.Id ? service : null);
         public Task<Service?> GetBySlug(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(service);
+        public Task<Service?> GetBySlugAndPublicBookingCode(string slug, string publicBookingCode, CancellationToken ct = default)
+            => Task.FromResult<Service?>(service.MatchesPublicBookingAccess(slug, publicBookingCode) ? service : null);
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(service);
+        public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default)
+            => Task.FromResult<Service?>(service.MatchesPublicBookingAccess(slug, publicBookingCode) ? service : null);
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<Service>> GetServicesByOwnerWithSecretaries(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<int>> GetServiceIdsBySecretary(int secretaryId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<List<int>> GetOwnerIdsBySecretary(int secretaryId, CancellationToken ct = default) => Task.FromResult(new List<int>());
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> ExistsPublicBookingCode(string publicBookingCode, int? excludedServiceId = null, CancellationToken ct = default)
+            => Task.FromResult(service.PublicBookingCode == publicBookingCode && (!excludedServiceId.HasValue || service.Id != excludedServiceId.Value));
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -266,13 +273,21 @@ public sealed class PublicBookingServiceTests
         public Task<User?> GetOne(int id, CancellationToken ct = default)
             => Task.FromResult<User?>(id == _owner.Id ? _owner : null);
 
+        public Task<User?> GetById(int id, CancellationToken ct = default)
+            => GetOne(id, ct);
+
         public Task<User?> GetByEmail(string email, CancellationToken ct = default)
             => Task.FromResult<User?>(null);
+
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, string? legacyRawToken = null, CancellationToken ct = default)
+            => Task.FromResult<RefreshToken?>(null);
 
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default)
             => Task.FromResult(false);
 
         public Task AddOne(User user, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AddRefreshToken(RefreshToken refreshToken, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
     }

@@ -244,20 +244,25 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("owner_id");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("phone_number");
+
                     b.Property<decimal?>("Price")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("price");
 
-                    b.Property<string>("PublicBookingToken")
+                    b.Property<string>("PublicBookingCode")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)")
-                        .HasColumnName("public_booking_token");
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)")
+                        .HasColumnName("public_booking_code");
 
-                    b.Property<DateTime?>("PublicBookingTokenUpdateAt")
+                    b.Property<DateTime?>("PublicBookingCodeUpdatedAt")
                         .HasColumnType("datetime2")
-                        .HasColumnName("public_booking_token_update_at");
+                        .HasColumnName("public_booking_code_updated_at");
 
                     b.Property<int>("ServiceTypeId")
                         .HasColumnType("int")
@@ -271,9 +276,9 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_services_owner_id");
 
-                    b.HasIndex("PublicBookingToken")
+                    b.HasIndex("PublicBookingCode")
                         .IsUnique()
-                        .HasDatabaseName("ux_services_public_booking_token");
+                        .HasDatabaseName("ux_services_public_booking_code");
 
                     b.HasIndex("ServiceTypeId")
                         .HasDatabaseName("ix_services_service_type_id");

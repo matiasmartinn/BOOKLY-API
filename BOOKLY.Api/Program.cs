@@ -4,6 +4,14 @@ using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.Sources.Clear();
+builder.Configuration
+    .SetBasePath(builder.Environment.ContentRootPath)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile(
+        $"appsettings.{builder.Environment.EnvironmentName}.json",
+        optional: true,
+        reloadOnChange: true);
 
 const string FrontendPolicy = "FrontendPolicy";
 

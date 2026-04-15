@@ -1,5 +1,6 @@
 using AutoMapper;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
@@ -278,17 +279,21 @@ public sealed class AppointmentSearchCreatedByTests
             => Task.FromResult<Service?>(id == service.Id ? service : null);
 
         public Task<Service?> GetBySlug(string slug, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Service?> GetBySlugAndPublicBookingCode(string slug, string publicBookingCode, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<Service>> GetServicesByOwnerWithSecretaries(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<int>> GetServiceIdsBySecretary(int secretaryId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<List<int>> GetOwnerIdsBySecretary(int secretaryId, CancellationToken ct = default) => Task.FromResult(new List<int>());
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> ExistsPublicBookingCode(string publicBookingCode, int? excludedServiceId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -311,9 +316,13 @@ public sealed class AppointmentSearchCreatedByTests
     private sealed class FakeUserRepository : IUserRepository
     {
         public Task<User?> GetOne(int id, CancellationToken ct = default) => Task.FromResult<User?>(null);
+        public Task<User?> GetById(int id, CancellationToken ct = default) => GetOne(id, ct);
         public Task<User?> GetByEmail(string email, CancellationToken ct = default) => Task.FromResult<User?>(null);
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, string? legacyRawToken = null, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default) => Task.FromResult(false);
         public Task AddOne(User user, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AddRefreshToken(RefreshToken refreshToken, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
     }

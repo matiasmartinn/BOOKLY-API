@@ -26,21 +26,26 @@ namespace BOOKLY.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("BooklyDb")
-                ?? throw new InvalidOperationException("Connection string 'BooklyDb' no encontrada.");
+            var connectionString = configuration.GetConnectionString("BooklyDb");
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new InvalidOperationException("ConnectionStrings:BooklyDb es requerida.");
+
             var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);
-            var jwtSettings = new JwtSettings
-            {
-                Issuer = configuration[$"{JwtSettings.SectionName}:Issuer"] ?? string.Empty,
-                Audience = configuration[$"{JwtSettings.SectionName}:Audience"] ?? string.Empty,
-                SecretKey = configuration[$"{JwtSettings.SectionName}:SecretKey"] ?? string.Empty,
-                AccessTokenExpirationMinutes = int.TryParse(
-                    configuration[$"{JwtSettings.SectionName}:AccessTokenExpirationMinutes"],
-                    out var expirationMinutes)
-                    ? expirationMinutes
-                    : 0
-            };
+
+            var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+                ?? throw new InvalidOperationException("JwtSettings es requerida.");
             jwtSettings.Validate();
+
+
+            var emailOptions = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
+                ?? throw new InvalidOperationException("Email es requerida.");
+
+            var frontendOptions = configuration.GetSection("Frontend").Get<FrontendOptions>()
+                ?? throw new InvalidOperationException("Frontend es requerida.");
+
+            services.AddSingleton(Options.Create(emailOptions));
+            services.AddSingleton(Options.Create(frontendOptions));
+            services.AddSingleton(Options.Create(jwtSettings));
 
             services.AddDbContext<BooklyDbContext>(options =>
             {
@@ -52,33 +57,6 @@ namespace BOOKLY.Infrastructure
 #endif
             });
 
-            var emailOptions = new EmailOptions
-            {
-                SenderName = configuration["Email:SenderName"] ?? "BOOKLY",
-                SenderAddress = configuration["Email:SenderAddress"] ?? string.Empty,
-                Smtp = new SmtpOptions
-                {
-                    Host = configuration["Email:Smtp:Host"] ?? string.Empty,
-                    Port = int.TryParse(configuration["Email:Smtp:Port"], out var port) ? port : 587,
-                    Username = configuration["Email:Smtp:Username"] ?? string.Empty,
-                    Password = configuration["Email:Smtp:Password"] ?? string.Empty,
-                    EnableSsl = !bool.TryParse(configuration["Email:Smtp:EnableSsl"], out var enableSsl) || enableSsl
-                }
-            };
-
-            var frontendOptions = new FrontendOptions
-            {
-                BaseUrl = configuration["Frontend:BaseUrl"] ?? "http://localhost:5173",
-                ConfirmEmailPath = configuration["Frontend:ConfirmEmailPath"] ?? "/auth/confirm-email",
-                ResetPasswordPath = configuration["Frontend:ResetPasswordPath"] ?? "/auth/reset-password",
-                CompleteSecretaryInvitationPath = configuration["Frontend:CompleteSecretaryInvitationPath"] ?? "/auth/secretary-invitation",
-                CompleteAdminInvitationPath = configuration["Frontend:CompleteAdminInvitationPath"] ?? "/auth/admin-invitation",
-                PublicBookingPath = configuration["Frontend:PublicBookingPath"] ?? "/book"
-            };
-
-            services.AddSingleton(Options.Create(emailOptions));
-            services.AddSingleton(Options.Create(frontendOptions));
-            services.AddSingleton(Options.Create(jwtSettings));
 
             var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey));
 

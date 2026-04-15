@@ -18,10 +18,16 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
         {
         }
 
-        public static RefreshToken Create(int userId, DateTime now)
+        public static string GenerateToken()
+            => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+        public static RefreshToken Create(int userId, string token, DateTime now)
         {
             if (userId <= 0)
-                throw new DomainException("UserId inválido.");
+                throw new DomainException("UserId invalido.");
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new DomainException("El token es requerido.");
 
             if (now == default)
                 throw new DomainException("La fecha actual es requerida.");
@@ -29,7 +35,7 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate
             return new RefreshToken
             {
                 UserId = userId,
-                Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+                Token = token,
                 CreatedAt = now,
                 ExpiresAt = now.Add(DefaultLifetime),
                 IsRevoked = false

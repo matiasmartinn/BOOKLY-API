@@ -1,4 +1,4 @@
-using System.Net;
+using System.Security.Cryptography;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
@@ -20,6 +20,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public int OwnerId { get; private set; }
         public Slug Slug { get; private set; } = null!;
         public string? Description { get; private set; }
+        public string? PhoneNumber { get; private set; }
         public Location? Location { get; private set; }
         public int ServiceTypeId { get; private set; }
         public DateTime CreatedAt { get; private set; }
@@ -30,8 +31,11 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public decimal? Price { get; private set; }
 
         public bool IsPublicBookingEnabled { get; private set; } = true;
-        public string PublicBookingToken { get; private set; } = null!;
-        public DateTime? PublicBookingTokenUpdateAt { get; private set; }
+        public string PublicBookingCode { get; private set; } = null!;
+        public DateTime? PublicBookingCodeUpdatedAt { get; private set; }
+
+        private const int PublicBookingCodeLength = 8;
+        private const string PublicBookingCodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 
         public IReadOnlyCollection<ServiceSchedule> ServiceSchedules => _serviceSchedules.AsReadOnly();
@@ -47,13 +51,45 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             int userId,
             string slug,
             string? description,
+            string? phoneNumber,
+            int serviceType,
+            DateTime createdAt,
+            Duration duration,
+            Capacity capacity,
+            Mode mode,
+            decimal? price,
+            string? publicBookingCode = null)
+        {
+            return Create(
+                name,
+                userId,
+                slug,
+                description,
+                phoneNumber,
+                null,
+                serviceType,
+                createdAt,
+                duration,
+                capacity,
+                mode,
+                price,
+                publicBookingCode);
+        }
+
+        public static Service Create(
+            string name,
+            int userId,
+            string slug,
+            string? description,
+            string? phoneNumber,
             Location? location,
             int serviceType,
             DateTime createdAt,
             Duration duration,
             Capacity capacity,
             Mode mode,
-            decimal? price)
+            decimal? price,
+            string? publicBookingCode = null)
         {
             ValidateString(name, "nombre");
 
@@ -61,7 +97,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 throw new DomainException("El dueño es requerido");
 
             if (createdAt == default)
-                throw new DomainException("La fecha de creaciÃ³n es requerida");
+                throw new DomainException("La fecha de creación es requerida");
 
             return new Service
             {
@@ -69,6 +105,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 OwnerId = userId,
                 Slug = Slug.Create(slug),
                 Description = description?.Trim(),
+                PhoneNumber = NormalizeOptionalPhoneNumber(phoneNumber),
                 Location = location,
                 ServiceTypeId = serviceType,
                 CreatedAt = createdAt,
@@ -78,8 +115,8 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 Price = price,
                 IsActive = true,
                 IsPublicBookingEnabled = true,
-                PublicBookingToken = GeneratePublicBookingToken(),
-                PublicBookingTokenUpdateAt = createdAt
+                PublicBookingCode = EnsureValidPublicBookingCode(publicBookingCode ?? GeneratePublicBookingCode()),
+                PublicBookingCodeUpdatedAt = createdAt
             };
         }
 
@@ -94,6 +131,11 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         {
             ValidateString(description, "descripcion");
             Description = description.Trim();
+        }
+
+        public void ChangePhoneNumber(string? phoneNumber)
+        {
+            PhoneNumber = NormalizeOptionalPhoneNumber(phoneNumber);
         }
 
         public void ChangeLocation(string? placeName, string? address, string? googleMapsUrl)
@@ -278,14 +320,13 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             _serviceUnavailability.Remove(item);
         }
 
-        public void EnablePublicBooking(DateTime now)
+        public void EnablePublicBooking(DateTime now, string? publicBookingCode = null)
         {
             IsPublicBookingEnabled = true;
 
-            if (string.IsNullOrWhiteSpace(PublicBookingToken))
+            if (string.IsNullOrWhiteSpace(PublicBookingCode))
             {
-                PublicBookingToken = GeneratePublicBookingToken();
-                PublicBookingTokenUpdateAt = now;
+                SetPublicBookingCode(publicBookingCode ?? GeneratePublicBookingCode(), now);
             }
         }
 
@@ -294,21 +335,20 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             IsPublicBookingEnabled = false;
         }
 
-        public void RegeneratePublicBookingToken(DateTime now)
+        public void RegeneratePublicBookingCode(DateTime now, string? publicBookingCode = null)
         {
-            PublicBookingToken = GeneratePublicBookingToken();
-            PublicBookingTokenUpdateAt = now;
+            SetPublicBookingCode(publicBookingCode ?? GeneratePublicBookingCode(), now);
         }
 
-        public bool MatchesPublicBookingAccess(string slug, string token)
+        public bool MatchesPublicBookingAccess(string slug, string code)
         {
             return string.Equals(Slug.Value, NormalizeSlug(slug), StringComparison.Ordinal) &&
-                   string.Equals(PublicBookingToken, NormalizePublicBookingToken(token), StringComparison.Ordinal);
+                   string.Equals(PublicBookingCode, NormalizePublicBookingCode(code), StringComparison.OrdinalIgnoreCase);
         }
 
-        public bool HasValidPublicBookingAccess(string slug, string token)
+        public bool HasValidPublicBookingAccess(string slug, string code)
         {
-            return MatchesPublicBookingAccess(slug, token) &&
+            return MatchesPublicBookingAccess(slug, code) &&
                    IsActive &&
                    IsPublicBookingEnabled;
         }
@@ -317,11 +357,16 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
 
         public void DisabledPublicBooking() => DisablePublicBooking();
 
-        private static string GeneratePublicBookingToken()
+        public static string GeneratePublicBookingCode()
         {
-            return Convert.ToHexString(Guid.NewGuid().ToByteArray())
-                .Replace("-", string.Empty)
-                .ToLowerInvariant();
+            Span<char> buffer = stackalloc char[PublicBookingCodeLength];
+
+            for (var index = 0; index < buffer.Length; index++)
+            {
+                buffer[index] = PublicBookingCodeAlphabet[RandomNumberGenerator.GetInt32(PublicBookingCodeAlphabet.Length)];
+            }
+
+            return new string(buffer);
         }
 
         private static string NormalizeSlug(string slug)
@@ -331,11 +376,47 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 : slug.Trim().ToLowerInvariant().Replace(" ", "-");
         }
 
-        private static string NormalizePublicBookingToken(string token)
+        private void SetPublicBookingCode(string publicBookingCode, DateTime updatedAt)
         {
-            return string.IsNullOrWhiteSpace(token)
+            PublicBookingCode = EnsureValidPublicBookingCode(publicBookingCode);
+            PublicBookingCodeUpdatedAt = updatedAt;
+        }
+
+        private static string EnsureValidPublicBookingCode(string publicBookingCode)
+        {
+            var normalizedCode = NormalizePublicBookingCode(publicBookingCode);
+
+            if (normalizedCode.Length != PublicBookingCodeLength || normalizedCode.Any(ch => !IsAsciiAlphaNumeric(ch)))
+                throw new DomainException("El codigo publico debe ser alfanumerico y tener 8 caracteres.");
+
+            return normalizedCode;
+        }
+
+        private static string NormalizePublicBookingCode(string publicBookingCode)
+        {
+            return string.IsNullOrWhiteSpace(publicBookingCode)
                 ? string.Empty
-                : token.Trim().ToLowerInvariant();
+                : publicBookingCode.Trim();
+        }
+
+        private static bool IsAsciiAlphaNumeric(char value)
+        {
+            return (value >= '0' && value <= '9') ||
+                   (value >= 'A' && value <= 'Z') ||
+                   (value >= 'a' && value <= 'z');
+        }
+
+        private static string? NormalizeOptionalPhoneNumber(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var trimmed = value.Trim();
+
+            if (trimmed.Length > 50)
+                throw new DomainException("El telefono no puede exceder los 50 caracteres.");
+
+            return trimmed;
         }
 
         private ServiceSecretary GetRequiredSecretary(int secretaryId)

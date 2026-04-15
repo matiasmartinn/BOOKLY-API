@@ -16,6 +16,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         [StringLength(500, ErrorMessage = "La descripción no puede exceder 500 caracteres")]
         public string? Description { get; init; }
 
+        [StringLength(50, ErrorMessage = "El telefono no puede exceder 50 caracteres")]
+        public string? PhoneNumber { get; init; }
+
         [StringLength(150, ErrorMessage = "El nombre del lugar no puede exceder 150 caracteres")]
         public string? PlaceName { get; init; }
 

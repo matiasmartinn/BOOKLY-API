@@ -18,6 +18,18 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Slug.Value == normalizedSlug, ct);
         }
 
+        public Task<Service?> GetBySlugAndPublicBookingCode(string slug, string publicBookingCode, CancellationToken ct = default)
+        {
+            var normalizedSlug = NormalizeSlug(slug);
+            var normalizedCode = NormalizePublicBookingCode(publicBookingCode);
+
+            return dbContext.Services
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(
+                    s => s.Slug.Value == normalizedSlug && s.PublicBookingCode == normalizedCode,
+                    ct);
+        }
+
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default)
         {
             return dbContext.Services
@@ -78,6 +90,23 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Slug.Value == normalizedSlug, ct);
         }
 
+        public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(
+            string slug,
+            string publicBookingCode,
+            CancellationToken ct = default)
+        {
+            var normalizedSlug = NormalizeSlug(slug);
+            var normalizedCode = NormalizePublicBookingCode(publicBookingCode);
+
+            return dbContext.Services
+                .AsSplitQuery()
+                .Include(s => s.ServiceSchedules)
+                .Include(s => s.ServicesUnavailability)
+                .FirstOrDefaultAsync(
+                    s => s.Slug.Value == normalizedSlug && s.PublicBookingCode == normalizedCode,
+                    ct);
+        }
+
         public async Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default)
         {
             return await dbContext.Services
@@ -102,6 +131,18 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .AnyAsync(s =>
                     s.Slug.Value == slug &&
+                    (!excludedServiceId.HasValue || s.Id != excludedServiceId.Value),
+                    ct);
+        }
+
+        public Task<bool> ExistsPublicBookingCode(string publicBookingCode, int? excludedServiceId = null, CancellationToken ct = default)
+        {
+            var normalizedCode = NormalizePublicBookingCode(publicBookingCode);
+
+            return dbContext.Services
+                .AsNoTracking()
+                .AnyAsync(s =>
+                    s.PublicBookingCode == normalizedCode &&
                     (!excludedServiceId.HasValue || s.Id != excludedServiceId.Value),
                     ct);
         }
@@ -157,11 +198,28 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .ToListAsync(ct);
         }
 
+        public Task<List<int>> GetOwnerIdsBySecretary(int secretaryId, CancellationToken ct = default)
+        {
+            return dbContext.Services
+                .AsNoTracking()
+                .Where(s => s.ServiceSecretaries.Any(ss => ss.SecretaryId == secretaryId))
+                .Select(s => s.OwnerId)
+                .Distinct()
+                .ToListAsync(ct);
+        }
+
         private static string NormalizeSlug(string slug)
         {
             return string.IsNullOrWhiteSpace(slug)
                 ? string.Empty
                 : slug.Trim().ToLowerInvariant().Replace(" ", "-");
+        }
+
+        private static string NormalizePublicBookingCode(string publicBookingCode)
+        {
+            return string.IsNullOrWhiteSpace(publicBookingCode)
+                ? string.Empty
+                : publicBookingCode.Trim();
         }
 
     }

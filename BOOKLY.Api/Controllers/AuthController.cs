@@ -40,17 +40,13 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _authService.Refresh(request, ct));
         }
 
-        [Authorize]
+        [AllowAnonymous]
         [HttpPost("logout")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Logout([FromBody] RefreshRequest request, CancellationToken ct)
         {
-            var currentUserId = GetAuthenticatedUserId();
-            if (currentUserId.IsFailure)
-                return HandleResult(Result.Failure(currentUserId.Error));
-
-            return HandleResult(await _authService.Logout(currentUserId.Data, request.RefreshToken, ct));
+            return HandleResult(await _authService.Logout(request.RefreshToken, ct));
         }
 
         [AllowAnonymous]

@@ -23,9 +23,9 @@ public sealed class ServiceAggregateTests
         var service = CreateService(3);
 
         Assert.True(service.IsPublicBookingEnabled);
-        Assert.False(string.IsNullOrWhiteSpace(service.PublicBookingToken));
-        Assert.Equal(32, service.PublicBookingToken.Length);
-        Assert.Equal(ReferenceNow, service.PublicBookingTokenUpdateAt);
+        Assert.False(string.IsNullOrWhiteSpace(service.PublicBookingCode));
+        Assert.Matches("^[A-Za-z0-9]{8}$", service.PublicBookingCode);
+        Assert.Equal(ReferenceNow, service.PublicBookingCodeUpdatedAt);
     }
 
     [Fact]
@@ -49,33 +49,34 @@ public sealed class ServiceAggregateTests
     }
 
     [Fact]
-    public void RegeneratePublicBookingToken_ShouldRotateTokenAndUpdateTimestamp()
+    public void RegeneratePublicBookingCode_ShouldRotateCodeAndUpdateTimestamp()
     {
         var service = CreateService(3);
-        var originalToken = service.PublicBookingToken;
+        var originalCode = service.PublicBookingCode;
         var regeneratedAt = ReferenceNow.AddHours(2);
 
-        service.RegeneratePublicBookingToken(regeneratedAt);
+        service.RegeneratePublicBookingCode(regeneratedAt);
 
-        Assert.NotEqual(originalToken, service.PublicBookingToken);
-        Assert.Equal(regeneratedAt, service.PublicBookingTokenUpdateAt);
+        Assert.NotEqual(originalCode, service.PublicBookingCode);
+        Assert.Matches("^[A-Za-z0-9]{8}$", service.PublicBookingCode);
+        Assert.Equal(regeneratedAt, service.PublicBookingCodeUpdatedAt);
     }
 
     [Fact]
-    public void HasValidPublicBookingAccess_ShouldRequireMatchingSlugTokenAndEnabledActiveService()
+    public void HasValidPublicBookingAccess_ShouldRequireMatchingSlugCodeAndEnabledActiveService()
     {
         var service = CreateService(3);
 
-        Assert.True(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
-        Assert.False(service.HasValidPublicBookingAccess("otro-servicio", service.PublicBookingToken));
-        Assert.False(service.HasValidPublicBookingAccess("consulta-general", "token-invalido"));
+        Assert.True(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingCode));
+        Assert.False(service.HasValidPublicBookingAccess("otro-servicio", service.PublicBookingCode));
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", "codigo-invalido"));
 
         service.DisablePublicBooking();
-        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingCode));
 
         service.EnablePublicBooking(ReferenceNow.AddMinutes(5));
         service.Deactivate();
-        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingToken));
+        Assert.False(service.HasValidPublicBookingAccess("consulta-general", service.PublicBookingCode));
     }
 
     private static Service CreateService(int capacity)

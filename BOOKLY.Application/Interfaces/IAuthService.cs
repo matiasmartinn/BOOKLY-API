@@ -7,6 +7,6 @@ namespace BOOKLY.Application.Interfaces
     {
         Task<Result<LoginResponse>> Login(LoginRequest request, CancellationToken ct = default);
         Task<Result<LoginResponse>> Refresh(RefreshRequest request, CancellationToken ct = default);
-        Task<Result> Logout(int userId, string refreshToken, CancellationToken ct = default);
+        Task<Result> Logout(string refreshToken, CancellationToken ct = default);
     }
 }

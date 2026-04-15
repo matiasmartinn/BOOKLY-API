@@ -18,7 +18,7 @@ namespace BOOKLY.Application.Interfaces
         Task<Result<ServicePublicBookingDto>> RegeneratePublicBooking(int serviceId, CancellationToken ct = default);
         Task<Result<List<ServiceScheduleDto>>> GetSchedulesByService(int serviceId, CancellationToken ct = default);
         Task<Result<List<ScheduleUnavailabilityDto>>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default);
-        Task<Result<ServiceDto>> SetSecretaries(int id, SetSecretariesDto dto, CancellationToken ct = default);
+        Task<Result<ServiceDto>> SetSecretaries(int id, SetSecretariesDto dto, int? ownerScopeId, CancellationToken ct = default);
         Task<Result> GrantSecretaryPermission(int serviceId, int secretaryId, SecretaryPermission permission, int currentUserId, UserRole currentUserRole, CancellationToken ct = default);
         Task<Result> RevokeSecretaryPermission(int serviceId, int secretaryId, SecretaryPermission permission, int currentUserId, UserRole currentUserRole, CancellationToken ct = default);
         Task<Result<ServiceDto>> SetSchedule(int id, List<CreateServiceScheduleDto> dto, CancellationToken ct = default);

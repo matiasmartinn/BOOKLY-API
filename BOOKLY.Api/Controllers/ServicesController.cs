@@ -187,7 +187,11 @@ namespace BOOKLY.Api.Controllers
             if (access.IsFailure)
                 return HandleResult(Result<ServiceDto>.Failure(access.Error));
 
-            return HandleResult(await _serviceApplicationService.SetSecretaries(id, dto, ct));
+            var ownerScopeId = User.IsInRole(Roles.Owner)
+                ? access.Data?.OwnerId
+                : null;
+
+            return HandleResult(await _serviceApplicationService.SetSecretaries(id, dto, ownerScopeId, ct));
         }
 
         [HttpPut("{id:int}/secretaries/{secretaryId:int}/permissions/{permission}")]

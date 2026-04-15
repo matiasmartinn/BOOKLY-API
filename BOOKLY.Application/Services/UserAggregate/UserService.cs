@@ -1,4 +1,5 @@
 using AutoMapper;
+using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
@@ -117,23 +118,36 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
 
-            var emailDispatch = await TrySendCriticalEmail(
-                () => _emailService.SendEmailConfirmation(
+            try
+            {
+                await _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
                         rawToken,
                         (int)EmailConfirmationTtl.TotalHours),
-                    ct),
-                "confirmación de email",
-                user.Email.Value,
-                "La cuenta se creo correctamente. Revisa tu email para confirmar el acceso antes de iniciar sesion.",
-                "La cuenta se creo, pero no pudimos enviar el email de confirmacion.");
+                    ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "No se pudo completar el registro porque fallo el envio del email de confirmacion a {RecipientEmail}.",
+                    user.Email.Value);
+
+                _userRepository.Remove(user);
+                await _unitOfWork.SaveChanges(ct);
+
+                return Result<RegisterOwnerResultDto>.Failure(
+                    Error.Validation("No pudimos completar el registro en este momento. Intenta nuevamente."));
+            }
 
             return Result<RegisterOwnerResultDto>.Success(
                 new RegisterOwnerResultDto(
                     await MapUserDtoAsync(user, ct),
-                    emailDispatch));
+                    new EmailDispatchResultDto(
+                        true,
+                        "Cuenta creada correctamente. Revisa tu correo para confirmar tu cuenta.")));
         }
 
         public async Task<Result> ConfirmEmail(ConfirmEmailDto dto, CancellationToken ct = default)
@@ -242,10 +256,10 @@ namespace BOOKLY.Application.Services.UserAggregate
             return Result.Success();
         }
 
-        public async Task<Result<UserDto>> InviteAdmin(InviteAdminDto dto, CancellationToken ct = default)
+        public async Task<Result<UserEmailDispatchResultDto>> InviteAdmin(InviteAdminDto dto, CancellationToken ct = default)
         {
             if (await _userRepository.ExistsByEmail(dto.Email, ct))
-                return Result<UserDto>.Failure(Error.Conflict("Email ya esta registrado."));
+                return Result<UserEmailDispatchResultDto>.Failure(Error.Conflict("Email ya esta registrado."));
 
             var user = User.CreateInvitedAdmin(
                 PersonName.Create(dto.FirstName, dto.LastName),
@@ -257,7 +271,7 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.AdminInvitation, SecretaryInvitationTtl, ct);
 
-            await TrySendEmail(
+            var emailDispatch = await TrySendCriticalEmail(
                 () => _emailService.SendAdminInvitation(
                     new AdminInvitationEmailModel(
                         user.Email.Value,
@@ -266,22 +280,27 @@ namespace BOOKLY.Application.Services.UserAggregate
                         (int)SecretaryInvitationTtl.TotalHours),
                     ct),
                 "invitacion de admin",
-                user.Email.Value);
+                user.Email.Value,
+                "El admin se invito correctamente y enviamos el email para completar el acceso.",
+                "El admin se creo, pero no pudimos enviar el email de invitacion.");
 
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
+            return Result<UserEmailDispatchResultDto>.Success(
+                new UserEmailDispatchResultDto(
+                    await MapUserDtoAsync(user, ct),
+                    emailDispatch));
         }
 
-        public async Task<Result<UserDto>> CreateSecretary(int ownerId, CreateSecretaryDto dto, CancellationToken ct = default)
+        public async Task<Result<UserEmailDispatchResultDto>> CreateSecretary(int ownerId, CreateSecretaryDto dto, CancellationToken ct = default)
         {
             var service = await _serviceRepository.GetOne(dto.ServiceId, ct);
             if (service is null)
-                return Result<UserDto>.Failure(Error.NotFound("Service"));
+                return Result<UserEmailDispatchResultDto>.Failure(Error.NotFound("Service"));
 
             if (service.OwnerId != ownerId)
-                return Result<UserDto>.Failure(Error.Validation("El servicio no pertenece al owner"));
+                return Result<UserEmailDispatchResultDto>.Failure(Error.Validation("El servicio no pertenece al owner"));
 
             if (await _userRepository.ExistsByEmail(dto.Email, ct))
-                return Result<UserDto>.Failure(Error.Conflict("Ya existe un usuario con ese email"));
+                return Result<UserEmailDispatchResultDto>.Failure(Error.Conflict("Ya existe un usuario con ese email"));
 
             var subscription = await GetEffectiveSubscription(ownerId, ct);
             var currentSecretaries = await _serviceRepository.CountAssignedSecretariesByOwnerId(ownerId, ct);
@@ -305,7 +324,7 @@ namespace BOOKLY.Application.Services.UserAggregate
                 ? "BOOKLY"
                 : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
 
-            await TrySendEmail(
+            var emailDispatch = await TrySendCriticalEmail(
                 () => _emailService.SendSecretaryInvitation(
                     new SecretaryInvitationEmailModel(
                         user.Email.Value,
@@ -316,9 +335,14 @@ namespace BOOKLY.Application.Services.UserAggregate
                         (int)SecretaryInvitationTtl.TotalHours),
                     ct),
                 "invitación de secretario",
-                user.Email.Value);
+                user.Email.Value,
+                "El secretario se creo correctamente y enviamos el email para completar el acceso.",
+                "El secretario se creo, pero no pudimos enviar el email de invitacion.");
 
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
+            return Result<UserEmailDispatchResultDto>.Success(
+                new UserEmailDispatchResultDto(
+                    await MapUserDtoAsync(user, ct),
+                    emailDispatch));
         }
 
         public async Task<Result<IReadOnlyCollection<SecretaryDto>>> GetSecretariesByOwner(int ownerId, CancellationToken ct = default)
@@ -349,36 +373,58 @@ namespace BOOKLY.Application.Services.UserAggregate
             return Result<IReadOnlyCollection<SecretaryDto>>.Success(result);
         }
 
+        public async Task<Result<UserDto>> GetOwnerSecretaryById(int ownerId, int secretaryId, CancellationToken ct = default)
+        {
+            var secretaryResult = await GetOwnedSecretary(ownerId, secretaryId, ct);
+            if (secretaryResult.Error is not null)
+                return Result<UserDto>.Failure(secretaryResult.Error);
+
+            return Result<UserDto>.Success(await MapUserDtoAsync(secretaryResult.Secretary!, ct));
+        }
+
         public Task<Result<UserDto>> CompleteInvitation(CompleteSecretaryInvitationDto dto, CancellationToken ct = default)
             => CompleteUserInvitation(dto.Token, dto.Password, UserTokenPurpose.SecretaryInvitation, "invitación", ct);
 
         public Task<Result<UserDto>> CompleteAdminInvitation(CompleteAdminInvitationDto dto, CancellationToken ct = default)
             => CompleteUserInvitation(dto.Token, dto.Password, UserTokenPurpose.AdminInvitation, "invitacion de admin", ct);
 
-        public async Task<Result> ActivateSecretary(int id, CancellationToken ct = default)
+        public async Task<Result> ActivateSecretary(int id, int? ownerId = null, CancellationToken ct = default)
         {
-            var user = await _userRepository.GetOne(id, ct);
-            if (user is null || user.Role != UserRole.Secretary)
-                return Result.Failure(Error.NotFound("Usuario"));
+            var secretaryResult = await ResolveSecretaryForUpdate(ownerId, id, ct);
+            if (secretaryResult.Error is not null)
+                return Result.Failure(secretaryResult.Error);
 
-            user.Activate();
-            _userRepository.Update(user);
+            secretaryResult.Secretary!.Activate();
+            _userRepository.Update(secretaryResult.Secretary);
             await _unitOfWork.SaveChanges(ct);
 
             return Result.Success();
         }
 
-        public async Task<Result> DeactivateSecretary(int id, CancellationToken ct = default)
+        public async Task<Result> DeactivateSecretary(int id, int? ownerId = null, CancellationToken ct = default)
         {
-            var user = await _userRepository.GetOne(id, ct);
-            if (user is null || user.Role != UserRole.Secretary)
-                return Result.Failure(Error.NotFound("Usuario"));
+            var secretaryResult = await ResolveSecretaryForUpdate(ownerId, id, ct);
+            if (secretaryResult.Error is not null)
+                return Result.Failure(secretaryResult.Error);
 
-            user.Deactivate();
-            _userRepository.Update(user);
+            secretaryResult.Secretary!.Deactivate();
+            _userRepository.Update(secretaryResult.Secretary);
             await _unitOfWork.SaveChanges(ct);
 
             return Result.Success();
+        }
+
+        public async Task<Result<UserDto>> UpdateOwnerSecretary(
+            int ownerId,
+            int secretaryId,
+            UpdateUserDto dto,
+            CancellationToken ct = default)
+        {
+            var secretaryResult = await GetOwnedSecretary(ownerId, secretaryId, ct);
+            if (secretaryResult.Error is not null)
+                return Result<UserDto>.Failure(secretaryResult.Error);
+
+            return await UpdateExistingUser(secretaryResult.Secretary!, dto, ct);
         }
 
         public async Task<Result<UserDto>> UpdateUser(int id, UpdateUserDto dto, CancellationToken ct = default)
@@ -387,6 +433,11 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return Result<UserDto>.Failure(Error.NotFound("Usuario"));
 
+            return await UpdateExistingUser(user, dto, ct);
+        }
+
+        private async Task<Result<UserDto>> UpdateExistingUser(User user, UpdateUserDto dto, CancellationToken ct)
+        {
             var newEmail = Email.Create(dto.Email);
             var emailChanged = !string.Equals(user.Email.Value, newEmail.Value, StringComparison.OrdinalIgnoreCase);
             if (emailChanged)
@@ -549,6 +600,39 @@ namespace BOOKLY.Application.Services.UserAggregate
             return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
         }
 
+        private async Task<(Error? Error, User? Secretary)> ResolveSecretaryForUpdate(
+            int? ownerId,
+            int secretaryId,
+            CancellationToken ct)
+        {
+            if (!ownerId.HasValue)
+            {
+                var secretary = await _userRepository.GetOne(secretaryId, ct);
+                if (secretary is null || secretary.Role != UserRole.Secretary)
+                    return (Error.NotFound("Usuario"), null);
+
+                return (null, secretary);
+            }
+
+            return await GetOwnedSecretary(ownerId.Value, secretaryId, ct);
+        }
+
+        private async Task<(Error? Error, User? Secretary)> GetOwnedSecretary(
+            int ownerId,
+            int secretaryId,
+            CancellationToken ct)
+        {
+            var secretary = await _userRepository.GetOne(secretaryId, ct);
+            if (secretary is null || secretary.Role != UserRole.Secretary)
+                return (Error.NotFound("Usuario"), null);
+
+            var ownerIds = await _serviceRepository.GetOwnerIdsBySecretary(secretaryId, ct);
+            if (!ownerIds.Contains(ownerId))
+                return (Error.Forbidden("No tienes permisos para operar sobre este secretario."), null);
+
+            return (null, secretary);
+        }
+
         private SecretaryDto MapSecretaryDto(User secretary, IReadOnlyCollection<int> serviceIds)
         {
             return _mapper.Map<SecretaryDto>(secretary, options =>
@@ -606,12 +690,13 @@ namespace BOOKLY.Application.Services.UserAggregate
                     purpose,
                     recipientEmail);
 
-                var message = ex is InvalidOperationException
-                    ? $"{failureMessage} {ex.Message}"
-                    : $"{failureMessage} Revisa la configuracion SMTP de la API e intenta nuevamente.";
+                var message = failureMessage;
 
                 return new EmailDispatchResultDto(false, message);
             }
         }
+
+
     }
 }
+

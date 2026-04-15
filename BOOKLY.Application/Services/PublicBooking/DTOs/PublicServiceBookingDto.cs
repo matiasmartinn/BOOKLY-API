@@ -7,6 +7,7 @@ namespace BOOKLY.Application.Services.PublicBooking.DTOs
         public string Name { get; init; } = null!;
         public string? OwnerName { get; init; }
         public string? Description { get; init; }
+        public string? PhoneNumber { get; init; }
         public string? PlaceName { get; init; }
         public string? Address { get; init; }
         public string? GoogleMapsUrl { get; init; }

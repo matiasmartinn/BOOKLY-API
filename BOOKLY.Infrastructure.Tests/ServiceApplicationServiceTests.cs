@@ -1,4 +1,5 @@
 using AutoMapper;
+using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;
@@ -45,6 +46,7 @@ public sealed class ServiceApplicationServiceTests
         Assert.NotNull(result.Data);
         Assert.Equal("Nuevo servicio", result.Data!.Name);
         Assert.NotNull(serviceRepository.AddedService);
+        Assert.Matches("^[A-Za-z0-9]{8}$", serviceRepository.AddedService!.PublicBookingCode);
     }
 
     [Fact]
@@ -67,6 +69,45 @@ public sealed class ServiceApplicationServiceTests
         Assert.Equal(ErrorType.Validation, result.Error.Type);
         Assert.Equal("El owner debe estar habilitado para crear servicios.", result.Error.Message);
         Assert.Null(serviceRepository.AddedService);
+    }
+
+    [Fact]
+    public async Task RegeneratePublicBooking_ShouldRetryCodeGenerationUntilItFindsAnAvailableOne()
+    {
+        var owner = CreateConfirmedOwner("grace@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 0)
+        {
+            StoredService = Service.Create(
+                "Servicio existente",
+                owner.Id,
+                "servicio-existente",
+                "Servicio de prueba",
+                null,
+                serviceType.Id,
+                ReferenceNow,
+                Duration.Create(60),
+                Capacity.Create(1),
+                Mode.Presence,
+                1000m,
+                "FIXED123")
+        };
+        serviceRepository.EnqueuePublicBookingCodeExists(true);
+        serviceRepository.EnqueuePublicBookingCodeExists(false);
+
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null));
+
+        var result = await sut.RegeneratePublicBooking(1);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.NotEqual("FIXED123", result.Data!.PublicBookingCode);
+        Assert.Matches("^[A-Za-z0-9]{8}$", result.Data.PublicBookingCode);
+        Assert.True(serviceRepository.ExistsPublicBookingCodeCallCount >= 2);
     }
 
     private static CreateServiceDto CreateServiceDto(int ownerId, int serviceTypeId, string name)
@@ -135,6 +176,7 @@ public sealed class ServiceApplicationServiceTests
     private sealed class FakeServiceRepository : IServiceRepository
     {
         private readonly int _activeServiceCount;
+        private readonly Queue<bool> _publicBookingCodeExistsResponses = new();
 
         public FakeServiceRepository(int activeServiceCount)
         {
@@ -142,20 +184,38 @@ public sealed class ServiceApplicationServiceTests
         }
 
         public Service? AddedService { get; private set; }
+        public Service? StoredService { get; set; }
+        public int ExistsPublicBookingCodeCallCount { get; private set; }
 
-        public Task<Service?> GetOne(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public void EnqueuePublicBookingCodeExists(bool exists) => _publicBookingCodeExistsResponses.Enqueue(exists);
+
+        public Task<Service?> GetOne(int id, CancellationToken ct = default)
+            => Task.FromResult<Service?>(StoredService);
+
         public Task<Service?> GetBySlug(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetBySlugAndPublicBookingCode(string slug, string publicBookingCode, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedules(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceSchedule>());
         public Task<List<ServiceUnavailability>> GetUnavailabilityByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceUnavailability>());
         public Task<List<Service>> GetServicesByOwner(int ownerId, CancellationToken ct = default) => Task.FromResult(new List<Service>());
         public Task<List<Service>> GetServicesByOwnerWithSecretaries(int ownerId, CancellationToken ct = default) => Task.FromResult(new List<Service>());
         public Task<List<int>> GetServiceIdsBySecretary(int secretaryId, CancellationToken ct = default) => Task.FromResult(new List<int>());
+        public Task<List<int>> GetOwnerIdsBySecretary(int secretaryId, CancellationToken ct = default) => Task.FromResult(new List<int>());
         public Task<bool> ExistsSlug(string slug, int? excludedServiceId = null, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<bool> ExistsPublicBookingCode(string publicBookingCode, int? excludedServiceId = null, CancellationToken ct = default)
+        {
+            ExistsPublicBookingCodeCallCount++;
+
+            if (_publicBookingCodeExistsResponses.Count > 0)
+                return Task.FromResult(_publicBookingCodeExistsResponses.Dequeue());
+
+            return Task.FromResult(false);
+        }
         public Task<bool> ExistsBlock(int id, DateTime startDateTime, DateTime endDateTime, CancellationToken ct = default) => Task.FromResult(false);
         public Task<int> CountByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(_activeServiceCount);
         public Task<int> CountActiveByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(_activeServiceCount);
@@ -164,10 +224,15 @@ public sealed class ServiceApplicationServiceTests
         public Task AddOne(Service service, CancellationToken ct = default)
         {
             AddedService = service;
+            StoredService = service;
             return Task.CompletedTask;
         }
 
-        public void Update(Service service) => AddedService = service;
+        public void Update(Service service)
+        {
+            AddedService = service;
+            StoredService = service;
+        }
         public void Remove(Service service) => throw new NotImplementedException();
     }
 
@@ -176,9 +241,15 @@ public sealed class ServiceApplicationServiceTests
         public Task<User?> GetOne(int id, CancellationToken ct = default)
             => Task.FromResult<User?>(id == owner.Id ? owner : null);
 
+        public Task<User?> GetById(int id, CancellationToken ct = default)
+            => GetOne(id, ct);
+
         public Task<User?> GetByEmail(string email, CancellationToken ct = default) => Task.FromResult<User?>(null);
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, string? legacyRawToken = null, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default) => Task.FromResult(false);
         public Task AddOne(User user, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task AddRefreshToken(RefreshToken refreshToken, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
     }
