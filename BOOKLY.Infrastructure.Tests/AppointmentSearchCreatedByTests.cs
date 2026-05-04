@@ -8,12 +8,14 @@ using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Queries;
+using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -93,6 +95,7 @@ public sealed class AppointmentSearchCreatedByTests
             appointmentRepository,
             new FakeServiceRepository(service),
             new FakeServiceTypeRepository(),
+            new FakeSubscriptionRepository(),
             new FakeUserRepository(),
             historyRepository,
             new AvailabilityService(),
@@ -325,6 +328,21 @@ public sealed class AppointmentSearchCreatedByTests
         public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeSubscriptionRepository : ISubscriptionRepository
+    {
+        public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default)
+            => Task.FromResult<Subscription?>(null);
+
+        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+            => Task.FromResult<Subscription?>(null);
+
+        public Task AddOne(Subscription subscription, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public void Update(Subscription subscription)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeEmailService : IEmailService

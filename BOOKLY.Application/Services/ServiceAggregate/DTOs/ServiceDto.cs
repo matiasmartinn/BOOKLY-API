@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
+using BOOKLY.Application.Services.ServiceTypeAggregate.DTOs;
+
+namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
 {
     public record ServiceDto
     {
@@ -10,7 +12,6 @@
         public string? PhoneNumber { get; init; }
         public string? PlaceName { get; init; }
         public string? Address { get; init; }
-        public string? GoogleMapsUrl { get; init; }
         public int ServiceTypeId { get; init; }
         public DateTime CreatedAt { get; init; }
         public int DurationMinutes { get; init; }
@@ -21,7 +22,8 @@
         public bool IsPublicBookingEnabled { get; init; }
         public string PublicBookingCode { get; init; } = null!;
         public DateTime? PublicBookingCodeUpdatedAt { get; init; }
-
+        public bool AllowsExtraFields { get; init; }
+        public List<ServiceTypeFieldDefinitionDto> FieldDefinitions { get; init; } = new();
         public List<int?> SecretaryIds { get; init; } = new();
         public List<ServiceSecretaryPermissionsDto> SecretaryPermissions { get; init; } = new();
         public List<ServiceScheduleDto?> Schedules { get; init; } = new();

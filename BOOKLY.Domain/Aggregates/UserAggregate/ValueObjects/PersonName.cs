@@ -16,9 +16,9 @@ namespace BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects
 
         public static PersonName Create(string firstName, string lastName)
         {
-            ValidateAndNormalizeName(firstName, "Nombre");
-            ValidateAndNormalizeName(lastName, "Apellido");
-            return new PersonName(firstName, lastName);
+            var normalizedFirstName = ValidateAndNormalizeName(firstName, "Nombre");
+            var normalizedLastName = ValidateAndNormalizeName(lastName, "Apellido");
+            return new PersonName(normalizedFirstName, normalizedLastName);
         }
 
         private static string ValidateAndNormalizeName(string name, string fieldName)

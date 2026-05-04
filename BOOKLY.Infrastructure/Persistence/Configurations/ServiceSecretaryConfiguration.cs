@@ -21,7 +21,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property<string>("PermissionsData")
                 .HasColumnName("permissions")
-                .HasColumnType("nvarchar(max)")
                 .HasDefaultValue("[]");
 
             // FK a User (secretary) - restrict (no cascada)

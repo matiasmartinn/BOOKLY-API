@@ -45,10 +45,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                         .HasColumnName("address")
                         .HasMaxLength(250);
 
-                location.Property(x => x.GoogleMapsUrl)
-                        .HasColumnName("google_maps_url")
-                        .HasMaxLength(500);
-
                 location.WithOwner();
             });
 

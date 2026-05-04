@@ -26,9 +26,7 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> Invite([FromBody] InviteAdminDto dto, CancellationToken ct)
         {
             var result = await _userService.InviteAdmin(dto, ct);
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(UsersController.GetById), "Users", new { id = result.Data?.User.Id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(UsersController.GetById), "Users", new { id = result.Data?.User.Id });
         }
 
         [AllowAnonymous]

@@ -11,12 +11,12 @@ namespace BOOKLY.Infrastructure.Persistence
         public BooklyDbContext CreateDbContext(string[] args)
         {
             var connectionString = ResolveConnectionString()
-                ?? throw new InvalidOperationException("La configuración ConnectionStrings:BooklyDb es requerida para diseño.");
+                ?? throw new InvalidOperationException("La configuraciÃ³n ConnectionStrings:BooklyDb es requerida para diseÃ±o.");
 
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 throw new InvalidOperationException(
-                    "La configuración ConnectionStrings:BooklyDb es requerida para diseño. Configúrala en appsettings.json o appsettings.Development.json.");
+                    "La configuraciÃ³n ConnectionStrings:BooklyDb es requerida para diseÃ±o. ConfigÃºrala en appsettings.json o appsettings.Development.json.");
             }
 
             var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);

@@ -44,7 +44,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                         appointment.StartDateTime,
                         appointment.CancelReason),
                     ct),
-                "cancelaciÃ³n de turno al cliente",
+                "cancelación de turno al cliente",
                 appointment.Client.Email.Value);
 
             if (!notifyOwner || owner is null)
@@ -62,7 +62,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                         appointment.StartDateTime,
                         appointment.CancelReason),
                     ct),
-                "cancelaciÃ³n de turno al owner",
+                "cancelación de turno al owner",
                 owner.Email.Value);
         }
 
@@ -76,7 +76,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             {
                 _logger.LogWarning(
                     ex,
-                    "El turno se guardÃ³ correctamente, pero ocurriÃ³ un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
+                    "El turno se guardó correctamente, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
                     purpose,
                     recipientEmail);
             }

@@ -14,12 +14,12 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects
             End = endRange;
         }
 
-        public static DateRange Create(DateOnly start, DateOnly end)
+        public static DateRange Create(DateOnly start, DateOnly end, DateOnly? today = null)
         {
             if (end < start)
                 throw new DomainException("La fecha de inicio debe ser menor o igual a la fecha de fin.");
 
-            if (start < DateOnly.FromDateTime(DateTime.Today))
+            if (start < (today ?? DateOnly.FromDateTime(DateTime.Today)))
                 throw new DomainException("No se puede crear una inhabilitación en fechas pasadas.");
 
             return new DateRange(start, end);

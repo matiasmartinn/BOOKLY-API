@@ -9,12 +9,16 @@ using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Queries;
+using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -82,12 +86,138 @@ public sealed class AppointmentServiceTests
         Assert.True(appointmentRepository.WasUpdated);
     }
 
-    private static AppointmentService CreateSut(Service service, FakeAppointmentRepository appointmentRepository)
+    [Fact]
+    public async Task CreateAppointment_ShouldAllowFreeOwnerWithoutFieldValuesEvenWhenServiceTypeHasRequiredFields()
+    {
+        var serviceDate = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
+        var service = CreateServiceWithSchedule(serviceDate);
+        var serviceType = CreateServiceTypeWithRequiredField(out _);
+
+        var appointmentRepository = new FakeAppointmentRepository();
+        var sut = CreateSut(service, appointmentRepository, serviceType);
+
+        var result = await sut.CreateAppointment(new CreateAppointmentDto
+        {
+            ServiceId = service.Id,
+            ClientName = "Grace Hopper",
+            ClientPhone = "1144455566",
+            ClientEmail = "grace@example.com",
+            StartDateTime = serviceDate.ToDateTime(new TimeOnly(10, 0))
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, appointmentRepository.AddCalls);
+        Assert.NotNull(appointmentRepository.LastAddedAppointment);
+        Assert.Empty(appointmentRepository.LastAddedAppointment!.FieldValues);
+    }
+
+    [Fact]
+    public async Task CreateAppointment_ShouldRejectFieldValuesForFreeOwner()
+    {
+        var serviceDate = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
+        var service = CreateServiceWithSchedule(serviceDate);
+        var serviceType = CreateServiceTypeWithRequiredField(out var fieldDefinitionId);
+
+        var appointmentRepository = new FakeAppointmentRepository();
+        var sut = CreateSut(service, appointmentRepository, serviceType);
+
+        var result = await sut.CreateAppointment(new CreateAppointmentDto
+        {
+            ServiceId = service.Id,
+            ClientName = "Grace Hopper",
+            ClientPhone = "1144455566",
+            ClientEmail = "grace@example.com",
+            StartDateTime = serviceDate.ToDateTime(new TimeOnly(10, 0)),
+            FieldValues =
+            [
+                new CreateAppointmentFieldValueDto
+                {
+                    FieldDefinitionId = fieldDefinitionId,
+                    Value = "OSDE"
+                }
+            ]
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.Validation, result.Error.Type);
+        Assert.Equal("El plan actual no permite utilizar campos extra.", result.Error.Message);
+        Assert.Equal(0, appointmentRepository.AddCalls);
+    }
+
+    [Fact]
+    public async Task CreateAppointment_ShouldRequireFieldValuesForProOwner()
+    {
+        var serviceDate = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
+        var service = CreateServiceWithSchedule(serviceDate);
+        var serviceType = CreateServiceTypeWithRequiredField(out _);
+        var subscription = CreateActiveProSubscription(service.OwnerId);
+
+        var appointmentRepository = new FakeAppointmentRepository();
+        var sut = CreateSut(service, appointmentRepository, serviceType, subscription);
+
+        var result = await sut.CreateAppointment(new CreateAppointmentDto
+        {
+            ServiceId = service.Id,
+            ClientName = "Grace Hopper",
+            ClientPhone = "1144455566",
+            ClientEmail = "grace@example.com",
+            StartDateTime = serviceDate.ToDateTime(new TimeOnly(10, 0))
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.Validation, result.Error.Type);
+        Assert.Equal("El campo 'Obra Social' es obligatorio.", result.Error.Message);
+        Assert.Equal(0, appointmentRepository.AddCalls);
+    }
+
+    [Fact]
+    public async Task CreateAppointment_ShouldPersistFieldValuesForProOwner()
+    {
+        var serviceDate = DateOnly.FromDateTime(ReferenceNow.AddDays(1));
+        var service = CreateServiceWithSchedule(serviceDate);
+        var serviceType = CreateServiceTypeWithRequiredField(out var fieldDefinitionId);
+        var subscription = CreateActiveProSubscription(service.OwnerId);
+
+        var appointmentRepository = new FakeAppointmentRepository();
+        var sut = CreateSut(service, appointmentRepository, serviceType, subscription);
+
+        var result = await sut.CreateAppointment(new CreateAppointmentDto
+        {
+            ServiceId = service.Id,
+            ClientName = "Grace Hopper",
+            ClientPhone = "1144455566",
+            ClientEmail = "grace@example.com",
+            StartDateTime = serviceDate.ToDateTime(new TimeOnly(10, 0)),
+            FieldValues =
+            [
+                new CreateAppointmentFieldValueDto
+                {
+                    FieldDefinitionId = fieldDefinitionId,
+                    Value = "OSDE 210"
+                }
+            ]
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, appointmentRepository.AddCalls);
+        Assert.NotNull(appointmentRepository.LastAddedAppointment);
+
+        var fieldValue = Assert.Single(appointmentRepository.LastAddedAppointment!.FieldValues);
+        Assert.Equal(fieldDefinitionId, fieldValue.FieldDefinitionId);
+        Assert.Equal("OSDE 210", fieldValue.Value);
+    }
+
+    private static AppointmentService CreateSut(
+        Service service,
+        FakeAppointmentRepository appointmentRepository,
+        ServiceType? serviceType = null,
+        Subscription? subscription = null)
     {
         return new AppointmentService(
             appointmentRepository,
             new FakeServiceRepository(service),
-            new FakeServiceTypeRepository(),
+            new FakeServiceTypeRepository(serviceType),
+            new FakeSubscriptionRepository(subscription),
             new FakeUserRepository(),
             new FakeAppointmentHistoryRepository(),
             new AvailabilityService(),
@@ -104,6 +234,17 @@ public sealed class AppointmentServiceTests
     {
         var configuration = new MapperConfiguration(cfg => cfg.AddMaps(typeof(AppointmentService).Assembly));
         return configuration.CreateMapper();
+    }
+
+    private static Subscription CreateActiveProSubscription(int ownerId)
+    {
+        return Subscription.CreatePaid(
+            ownerId,
+            SubscriptionPlan.Pro(),
+            SubscriptionPeriod.Create(
+                DateOnly.FromDateTime(ReferenceNow.AddDays(-1)),
+                DateOnly.FromDateTime(ReferenceNow.AddMonths(1))),
+            ReferenceNow.AddDays(-1));
     }
 
     private static Service CreateServiceWithSchedule(DateOnly date)
@@ -136,6 +277,30 @@ public sealed class AppointmentServiceTests
         return service;
     }
 
+    private static ServiceType CreateServiceTypeWithRequiredField(out int fieldDefinitionId)
+    {
+        var serviceType = ServiceType.Create("Consulta");
+
+        typeof(ServiceType)
+            .GetProperty(nameof(ServiceType.Id))!
+            .SetValue(serviceType, 5);
+
+        var field = serviceType.AddField(
+            "obra_social",
+            "Obra Social",
+            ServiceFieldType.Text,
+            isRequired: true,
+            sortOrder: 0,
+            now: ReferenceNow);
+
+        typeof(ServiceTypeFieldDefinition)
+            .GetProperty(nameof(ServiceTypeFieldDefinition.Id))!
+            .SetValue(field, 1);
+
+        fieldDefinitionId = field.Id;
+        return serviceType;
+    }
+
     private sealed class FakeAppointmentRepository : IAppointmentRepository
     {
         private readonly Appointment? _appointment;
@@ -146,6 +311,7 @@ public sealed class AppointmentServiceTests
         }
 
         public int AddCalls { get; private set; }
+        public Appointment? LastAddedAppointment { get; private set; }
         public bool WasUpdated { get; private set; }
 
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDate(int serviceId, DateOnly date, CancellationToken ct = default)
@@ -187,6 +353,7 @@ public sealed class AppointmentServiceTests
         public Task AddOne(Appointment appointment, CancellationToken ct = default)
         {
             AddCalls++;
+            LastAddedAppointment = appointment;
             return Task.CompletedTask;
         }
 
@@ -226,10 +393,11 @@ public sealed class AppointmentServiceTests
         public void Remove(Service service) => throw new NotImplementedException();
     }
 
-    private sealed class FakeServiceTypeRepository : IServiceTypeRepository
+    private sealed class FakeServiceTypeRepository(ServiceType? serviceType = null) : IServiceTypeRepository
     {
         public Task<ICollection<ServiceType>> GetAll(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<ServiceType?> GetByIdWithFields(int id, CancellationToken ct = default) => Task.FromResult<ServiceType?>(ServiceType.Create("Consulta"));
+        public Task<ServiceType?> GetByIdWithFields(int id, CancellationToken ct = default)
+            => Task.FromResult<ServiceType?>(serviceType ?? ServiceType.Create("Consulta"));
         public Task<ServiceType?> GetOne(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task AddOne(ServiceType serviceType, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(ServiceType serviceType) => throw new NotImplementedException();
@@ -248,6 +416,21 @@ public sealed class AppointmentServiceTests
         public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeSubscriptionRepository(Subscription? subscription = null) : ISubscriptionRepository
+    {
+        public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default)
+            => Task.FromResult(subscription);
+
+        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+            => Task.FromResult(subscription);
+
+        public Task AddOne(Subscription subscription, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public void Update(Subscription subscription)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeAppointmentHistoryRepository : IAppointmentHistoryRepository

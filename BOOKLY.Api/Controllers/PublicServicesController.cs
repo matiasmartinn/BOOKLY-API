@@ -67,9 +67,7 @@ namespace BOOKLY.Api.Controllers
             CancellationToken ct)
         {
             var result = await _publicBookingService.CreateAppointment(slug, code, dto, ct);
-            return result.IsSuccess
-                ? StatusCode(StatusCodes.Status201Created, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result);
         }
     }
 }

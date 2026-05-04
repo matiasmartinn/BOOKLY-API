@@ -9,11 +9,14 @@ using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
+using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -25,6 +28,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IAppointmentRepository _repository;
         private readonly IServiceRepository _serviceRepository;
         private readonly IServiceTypeRepository _serviceTypeRepository;
+        private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAppointmentHistoryRepository _historyRepository;
         private readonly IAvailabilityService _availabilityService;
@@ -40,6 +44,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IAppointmentRepository repository,
             IServiceRepository serviceRepository,
             IServiceTypeRepository serviceTypeRepository,
+            ISubscriptionRepository subscriptionRepository,
             IUserRepository userRepository,
             IAppointmentHistoryRepository historyRepository,
             IAvailabilityService availabilityService,
@@ -54,6 +59,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _repository = repository;
             _serviceRepository = serviceRepository;
             _serviceTypeRepository = serviceTypeRepository;
+            _subscriptionRepository = subscriptionRepository;
             _userRepository = userRepository;
             _historyRepository = historyRepository;
             _availabilityService = availabilityService;
@@ -204,9 +210,18 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (serviceType == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("TipoServicio"));
 
-            var fieldValidation = ValidateFieldValues(dto.FieldValues, serviceType);
-            if (fieldValidation.IsFailure)
-                return Result<AppointmentDto>.Failure(fieldValidation.Error!);
+            var extraFieldsValidation = await ValidateExtraFieldsAllowed(service.OwnerId, ct);
+            var canUseExtraFields = extraFieldsValidation.IsSuccess;
+
+            if (!canUseExtraFields && dto.FieldValues.Count > 0)
+                return Result<AppointmentDto>.Failure(extraFieldsValidation.Error!);
+
+            if (canUseExtraFields)
+            {
+                var fieldValidation = ValidateFieldValues(dto.FieldValues, serviceType);
+                if (fieldValidation.IsFailure)
+                    return Result<AppointmentDto>.Failure(fieldValidation.Error!);
+            }
 
             var slotValidation = await ValidateSlotAvailability(
                 service,
@@ -217,18 +232,29 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (slotValidation.IsFailure)
                 return Result<AppointmentDto>.Failure(slotValidation.Error!);
 
-            var appointment = Appointment.Create(
-                dto.ServiceId,
-                dto.AssignedSecretaryId,
-                ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)),
-                dto.StartDateTime,
-                service.DurationMinutes,
-                dto.ClientNotes,
-                now,
-                NormalizeActorUserId(dto.UserId));
+            Appointment appointment;
+            try
+            {
+                appointment = Appointment.Create(
+                    dto.ServiceId,
+                    dto.AssignedSecretaryId,
+                    ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)),
+                    dto.StartDateTime,
+                    service.DurationMinutes,
+                    dto.ClientNotes,
+                    now,
+                    NormalizeActorUserId(dto.UserId));
 
-            foreach (var fv in dto.FieldValues)
-                appointment.AddFieldValue(fv.FieldDefinitionId, fv.Value);
+                if (canUseExtraFields)
+                {
+                    foreach (var fv in dto.FieldValues)
+                        appointment.AddFieldValue(fv.FieldDefinitionId, fv.Value);
+                }
+            }
+            catch (DomainException ex)
+            {
+                return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _repository.AddOne(appointment, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -245,8 +271,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("Turno"));
 
-            appointment.ChangeClientInfo(ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)), now);
-            appointment.ChangeClientNotes(dto.ClientNotes, now);
+            try
+            {
+                appointment.ChangeClientInfo(ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)), now);
+                appointment.ChangeClientNotes(dto.ClientNotes, now);
+            }
+            catch (DomainException ex)
+            {
+                return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
@@ -274,7 +307,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 return Result<AppointmentDto>.Failure(slotValidation.Error!);
 
             var previousStartDateTime = appointment.StartDateTime;
-            appointment.Reschedule(dto.StartDateTime, service.DurationMinutes, now);
+            try
+            {
+                appointment.Reschedule(dto.StartDateTime, service.DurationMinutes, now);
+            }
+            catch (DomainException ex)
+            {
+                return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
+            }
+
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
 
@@ -294,7 +335,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            appointment.MarkAsCancel(dto.Reason, now, NormalizeActorUserId(dto.UserId));
+            try
+            {
+                appointment.MarkAsCancel(dto.Reason, now, NormalizeActorUserId(dto.UserId));
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
 
@@ -314,7 +363,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            appointment.MarkAsAttended(now, NormalizeActorUserId(userId));
+            try
+            {
+                appointment.MarkAsAttended(now, NormalizeActorUserId(userId));
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
@@ -327,7 +384,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (appointment == null)
                 return Result.Failure(Error.NotFound("Turno"));
 
-            appointment.MarkAsNoShow(now, NormalizeActorUserId(userId));
+            try
+            {
+                appointment.MarkAsNoShow(now, NormalizeActorUserId(userId));
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
@@ -659,6 +724,32 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     purpose,
                     recipientEmail);
             }
+        }
+
+        private async Task<Result> ValidateExtraFieldsAllowed(int ownerId, CancellationToken ct)
+        {
+            var subscription = await GetEffectiveSubscription(ownerId, ct);
+
+            try
+            {
+                subscription.EnsureCanUseExtraFields();
+                return Result.Success();
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+        }
+
+        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
+        {
+            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
+            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
+
+            if (subscription == null || !subscription.IsActive(today))
+                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
+
+            return subscription;
         }
     }
 }

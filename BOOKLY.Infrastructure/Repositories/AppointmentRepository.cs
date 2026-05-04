@@ -10,6 +10,13 @@ namespace BOOKLY.Infrastructure.Repositories
     {
         public AppointmentRepository(BooklyDbContext context) : base(context) { }
 
+        public override Task<Appointment?> GetOne(int id, CancellationToken cancellationToken = default)
+        {
+            return dbContext.Appointments
+                .Include(a => a.FieldValues)
+                .SingleOrDefaultAsync(a => a.Id == id, cancellationToken);
+        }
+
         public async Task<bool> ExistsOverlap(
             int serviceId,
             DateTime start,
@@ -30,6 +37,7 @@ namespace BOOKLY.Infrastructure.Repositories
         public async Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default)
         {
             return await dbContext.Appointments
+                .Include(a => a.FieldValues)
                 .Where(a => a.ServiceId == serviceId)
                 .OrderByDescending(a => a.StartDateTime)
                 .AsNoTracking()
@@ -50,6 +58,7 @@ namespace BOOKLY.Infrastructure.Repositories
                 return [];
 
             var query = dbContext.Appointments
+                .Include(a => a.FieldValues)
                 .Where(a => serviceIds.Contains(a.ServiceId))
                 .AsNoTracking();
 

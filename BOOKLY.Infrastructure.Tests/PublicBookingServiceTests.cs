@@ -8,6 +8,7 @@ using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.DomainServices;
@@ -185,6 +186,7 @@ public sealed class PublicBookingServiceTests
             new FakeServiceRepository(service),
             new FakeServiceTypeRepository(),
             new FakeUserRepository(),
+            new FakeSubscriptionRepository(),
             new FakeAppointmentRepository(),
             appointmentService ?? new FakeAppointmentService(),
             new FakeAvailabilityService(),
@@ -290,6 +292,21 @@ public sealed class PublicBookingServiceTests
         public Task RevokeAllUserTokens(int userId, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(User user) => throw new NotImplementedException();
         public void Remove(User user) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeSubscriptionRepository : ISubscriptionRepository
+    {
+        public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default)
+            => Task.FromResult<Subscription?>(null);
+
+        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+            => Task.FromResult<Subscription?>(null);
+
+        public Task AddOne(Subscription subscription, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public void Update(Subscription subscription)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeAppointmentService : IAppointmentService

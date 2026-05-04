@@ -10,12 +10,12 @@ namespace BOOKLY.Application.Services.PublicBooking.DTOs
         public string? PhoneNumber { get; init; }
         public string? PlaceName { get; init; }
         public string? Address { get; init; }
-        public string? GoogleMapsUrl { get; init; }
         public int ServiceTypeId { get; init; }
         public int DurationMinutes { get; init; }
         public int Capacity { get; init; }
         public string Mode { get; init; } = null!;
         public decimal? Price { get; init; }
+        public bool AllowsExtraFields { get; init; }
         public List<PublicServiceFieldDto> FieldDefinitions { get; init; } = [];
     }
 }

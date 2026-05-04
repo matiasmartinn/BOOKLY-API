@@ -54,7 +54,9 @@ namespace BOOKLY.Application.Mappings
                 .ForMember(d => d.DurationMinutes,
                     opt => opt.MapFrom(s => s.Duration.Value))
                 .ForMember(d => d.Status,
-                    opt => opt.MapFrom(s => s.Status));
+                    opt => opt.MapFrom(s => s.Status))
+                .ForMember(d => d.FieldValues,
+                    opt => opt.MapFrom(s => s.FieldValues));
 
             // AppointmentFieldValue → AppointmentFieldValueDto
             CreateMap<AppointmentFieldValue, AppointmentFieldValueDto>();

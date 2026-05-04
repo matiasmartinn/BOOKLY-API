@@ -2,6 +2,7 @@ using BOOKLY.Api.Middleware;
 using BOOKLY.Application.DependencyInjection;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
+using BOOKLY.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.Sources.Clear();
@@ -43,6 +44,8 @@ builder.Services.AddApplicationServices();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 
 var app = builder.Build();
+
+await app.Services.SeedBooklyDataAsync();
 
 app.UseExceptionHandling();
 

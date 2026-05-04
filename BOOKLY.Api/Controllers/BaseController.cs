@@ -32,6 +32,26 @@ namespace BOOKLY.Api.Controllers
             return MapError(result.Error!);
         }
 
+        protected IActionResult HandleCreated<T>(
+            Result<T> result,
+            string actionName,
+            string controllerName,
+            object? routeValues = null)
+        {
+            if (result.IsSuccess)
+                return CreatedAtAction(actionName, controllerName, routeValues, result.Data);
+
+            return MapError(result.Error!);
+        }
+
+        protected IActionResult HandleCreated<T>(Result<T> result)
+        {
+            if (result.IsSuccess)
+                return StatusCode(StatusCodes.Status201Created, result.Data);
+
+            return MapError(result.Error!);
+        }
+
         protected Result<int> GetAuthenticatedUserId()
         {
             var rawUserId =
@@ -94,6 +114,11 @@ namespace BOOKLY.Api.Controllers
                 detail: error.Message,
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Error de validación"),
+
+            ErrorType.Domain => Problem(
+                detail: error.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Regla de negocio violada"),
 
             ErrorType.Conflict => Problem(
                 detail: error.Message,

@@ -107,11 +107,19 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (!passwordValidation.IsSuccess)
                 return Result<RegisterOwnerResultDto>.Failure(passwordValidation.Error!);
 
-            var user = User.CreateOwner(
-                PersonName.Create(dto.FirstName, dto.LastName),
-                Email.Create(dto.Email),
-                Password.FromHash(_passwordHasher.Hash(dto.Password)),
-                _dateTimeProvider.NowArgentina());
+            User user;
+            try
+            {
+                user = User.CreateOwner(
+                    PersonName.Create(dto.FirstName, dto.LastName),
+                    Email.Create(dto.Email),
+                    Password.FromHash(_passwordHasher.Hash(dto.Password)),
+                    _dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result<RegisterOwnerResultDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _userRepository.AddOne(user, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -162,8 +170,15 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (token.IsUsed && user.EmailConfirmed)
                 return Result.Success();
 
-            user.ConfirmEmail();
-            token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+            try
+            {
+                user.ConfirmEmail();
+                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
 
             _userTokenRepository.Update(token);
             _userRepository.Update(user);
@@ -245,8 +260,15 @@ namespace BOOKLY.Application.Services.UserAggregate
             var token = tokenResult.Token!;
             var user = tokenResult.User!;
 
-            user.SetPassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
-            token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+            try
+            {
+                user.SetPassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
+                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
 
             await _userRepository.RevokeAllUserTokens(user.Id, ct);
             _userTokenRepository.Update(token);
@@ -261,10 +283,18 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (await _userRepository.ExistsByEmail(dto.Email, ct))
                 return Result<UserEmailDispatchResultDto>.Failure(Error.Conflict("Email ya esta registrado."));
 
-            var user = User.CreateInvitedAdmin(
-                PersonName.Create(dto.FirstName, dto.LastName),
-                Email.Create(dto.Email),
-                _dateTimeProvider.NowArgentina());
+            User user;
+            try
+            {
+                user = User.CreateInvitedAdmin(
+                    PersonName.Create(dto.FirstName, dto.LastName),
+                    Email.Create(dto.Email),
+                    _dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result<UserEmailDispatchResultDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _userRepository.AddOne(user, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -304,12 +334,21 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             var subscription = await GetEffectiveSubscription(ownerId, ct);
             var currentSecretaries = await _serviceRepository.CountAssignedSecretariesByOwnerId(ownerId, ct);
-            subscription.EnsureCanAssignSecretary(currentSecretaries);
 
-            var user = User.CreateSecretary(
-                PersonName.Create(dto.FirstName, dto.LastName),
-                Email.Create(dto.Email),
-                _dateTimeProvider.NowArgentina());
+            User user;
+            try
+            {
+                subscription.EnsureCanAssignSecretary(currentSecretaries);
+
+                user = User.CreateSecretary(
+                    PersonName.Create(dto.FirstName, dto.LastName),
+                    Email.Create(dto.Email),
+                    _dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result<UserEmailDispatchResultDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _userRepository.AddOne(user, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -438,7 +477,16 @@ namespace BOOKLY.Application.Services.UserAggregate
 
         private async Task<Result<UserDto>> UpdateExistingUser(User user, UpdateUserDto dto, CancellationToken ct)
         {
-            var newEmail = Email.Create(dto.Email);
+            Email newEmail;
+            try
+            {
+                newEmail = Email.Create(dto.Email);
+            }
+            catch (DomainException ex)
+            {
+                return Result<UserDto>.Failure(Error.Validation(ex.Message));
+            }
+
             var emailChanged = !string.Equals(user.Email.Value, newEmail.Value, StringComparison.OrdinalIgnoreCase);
             if (emailChanged)
             {
@@ -447,8 +495,15 @@ namespace BOOKLY.Application.Services.UserAggregate
                     return Result<UserDto>.Failure(Error.Conflict("Email ya está registrado."));
             }
 
-            user.ChangeUserName(PersonName.Create(dto.FirstName, dto.LastName));
-            user.ChangeEmail(newEmail);
+            try
+            {
+                user.ChangeUserName(PersonName.Create(dto.FirstName, dto.LastName));
+                user.ChangeEmail(newEmail);
+            }
+            catch (DomainException ex)
+            {
+                return Result<UserDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _userRepository.Update(user);
             await _unitOfWork.SaveChanges(ct);
@@ -478,7 +533,14 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return Result.Failure(Error.NotFound("Usuario"));
 
-            user.Deactivate();
+            try
+            {
+                user.Deactivate();
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
             _userRepository.Update(user);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
@@ -499,11 +561,19 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (!passwordValidation.IsSuccess)
                 return Result<UserDto>.Failure(passwordValidation.Error!);
 
-            var user = factory(
-                PersonName.Create(dto.FirstName, dto.LastName),
-                Email.Create(dto.Email),
-                Password.FromHash(_passwordHasher.Hash(dto.Password)),
-                _dateTimeProvider.NowArgentina());
+            User user;
+            try
+            {
+                user = factory(
+                    PersonName.Create(dto.FirstName, dto.LastName),
+                    Email.Create(dto.Email),
+                    Password.FromHash(_passwordHasher.Hash(dto.Password)),
+                    _dateTimeProvider.NowArgentina());
+            }
+            catch (DomainException ex)
+            {
+                return Result<UserDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _userRepository.AddOne(user, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -585,13 +655,12 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.AcceptInvitation(Password.FromHash(_passwordHasher.Hash(password)));
+                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
             }
             catch (DomainException ex)
             {
                 return Result<UserDto>.Failure(Error.Validation(ex.Message));
             }
-
-            token.MarkAsUsed(_dateTimeProvider.NowArgentina());
 
             _userTokenRepository.Update(token);
             _userRepository.Update(user);

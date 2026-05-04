@@ -30,7 +30,7 @@ namespace BOOKLY.Infrastructure.Tests;
 
 public sealed class ServiceUnavailabilityCancellationTests
 {
-    private static readonly DateTime ReferenceNow = new(2026, 4, 8, 10, 0, 0);
+    private static readonly DateTime ReferenceNow = DateTime.Today.AddDays(1).AddHours(10);
 
     [Fact]
     public async Task AddUnavailability_ShouldCancelAffectedPendingFutureAppointments_WhenFlagIsEnabled()
@@ -67,7 +67,7 @@ public sealed class ServiceUnavailabilityCancellationTests
         var attended = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.AttendedAppointmentId);
 
         Assert.Equal(AppointmentStatus.Cancelled, cancelled.Status);
-        Assert.Equal("Cancelado por excepcion de agenda: Capacitacion interna", cancelled.CancelReason);
+        Assert.Equal("Cancelado por excepción de agenda: Capacitacion interna", cancelled.CancelReason);
         Assert.Equal(AppointmentStatus.Pending, untouchedFuturePending.Status);
         Assert.Equal(AppointmentStatus.Pending, pastPending.Status);
         Assert.Equal(AppointmentStatus.Attended, attended.Status);
@@ -80,7 +80,7 @@ public sealed class ServiceUnavailabilityCancellationTests
         var cancellationHistory = Assert.Single(history);
         Assert.Equal(AppointmentStatus.Pending, cancellationHistory.OldStatus);
         Assert.Equal(AppointmentStatus.Cancelled, cancellationHistory.NewStatus);
-        Assert.Equal("Cancelado por excepcion de agenda: Capacitacion interna", cancellationHistory.Reason);
+        Assert.Equal("Cancelado por excepción de agenda: Capacitacion interna", cancellationHistory.Reason);
         Assert.Equal(seed.Owner.Id, cancellationHistory.UserId);
 
         var savedService = await context.Services
@@ -99,7 +99,7 @@ public sealed class ServiceUnavailabilityCancellationTests
     }
 
     [Fact]
-    public async Task AddUnavailability_ShouldPreservePreviousBehavior_WhenCancellationFlagIsDisabled()
+    public async Task AddUnavailability_ShouldCancelAffectedPendingFutureAppointments_WhenCancellationFlagIsDisabled()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -126,17 +126,22 @@ public sealed class ServiceUnavailabilityCancellationTests
 
         Assert.True(result.IsSuccess);
 
-        var pending = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
-        Assert.Equal(AppointmentStatus.Pending, pending.Status);
-        Assert.Null(pending.CancelReason);
-        Assert.Empty(notifier.Calls);
+        var cancelled = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
+        Assert.Equal(AppointmentStatus.Cancelled, cancelled.Status);
+        Assert.Equal("Cancelado por excepción de agenda: Capacitacion interna", cancelled.CancelReason);
+        Assert.Single(notifier.Calls);
 
         var savedService = await context.Services
             .Include(service => service.ServicesUnavailability)
             .SingleAsync(service => service.Id == seed.Service.Id);
 
         Assert.Single(savedService.ServicesUnavailability);
-        Assert.Empty(await context.AppointmentStatusHistories.AsNoTracking().ToListAsync());
+        var cancellationHistory = await context.AppointmentStatusHistories
+            .AsNoTracking()
+            .SingleAsync(h => h.AppointmentId == seed.CancelledAppointmentId);
+
+        Assert.Equal(AppointmentStatus.Pending, cancellationHistory.OldStatus);
+        Assert.Equal(AppointmentStatus.Cancelled, cancellationHistory.NewStatus);
     }
 
     [Fact]
@@ -171,7 +176,7 @@ public sealed class ServiceUnavailabilityCancellationTests
         var untouchedFuturePending = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.UnaffectedFuturePendingAppointmentId);
 
         Assert.Equal(AppointmentStatus.Cancelled, cancelled.Status);
-        Assert.Equal("Cancelado por excepcion de agenda: Vacaciones", cancelled.CancelReason);
+        Assert.Equal("Cancelado por excepción de agenda: Vacaciones", cancelled.CancelReason);
         Assert.Equal(AppointmentStatus.Pending, untouchedFuturePending.Status);
 
         var cancellationHistory = await context.AppointmentStatusHistories

@@ -20,6 +20,7 @@ using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using Microsoft.Extensions.Options;
+using BOOKLY.Application.Services.ServiceTypeAggregate.DTOs;
 
 namespace BOOKLY.Application.Services.ServiceAggregate
 {
@@ -73,7 +74,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+            return Result<ServiceDto>.Success(await BuildServiceDto(service, ct));
         }
 
         public async Task<Result<List<ServiceDto>>> GetServicesByOwner(int ownerId, CancellationToken ct = default)
@@ -110,34 +111,60 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             var subscription = await GetEffectiveSubscription(dto.OwnerId, ct);
             var currentServices = await _serviceRepository.CountActiveByOwnerId(dto.OwnerId, ct);
 
-            subscription.EnsureCanCreateService(currentServices);
-            EnsureExtraFieldsAllowed(subscription, serviceType);
+            var subscriptionValidation = ValidateCanCreateService(subscription, currentServices);
+            if (subscriptionValidation.IsFailure)
+                return Result<ServiceDto>.Failure(subscriptionValidation.Error);
+
+            var extraFieldsValidation = EnsureExtraFieldsAllowed(subscription, serviceType);
+            if (extraFieldsValidation.IsFailure)
+                return Result<ServiceDto>.Failure(extraFieldsValidation.Error);
 
             var slug = await GenerateUniqueSlugAsync(dto.Name, null, ct);
+            Service service;
 
-            var service = Service.Create(
-                dto.Name,
-                dto.OwnerId,
-                slug,
-                dto.Description,
-                dto.PhoneNumber,
-                Location.Create(dto.PlaceName, dto.Address, dto.GoogleMapsUrl),
-                dto.ServiceTypeId,
-                _dateTimeProvider.NowArgentina(),
-                Duration.Create(dto.DurationMinutes),
-                Capacity.Create(dto.Capacity),
-                Mode.Presence,
-                dto.Price,
-                await GenerateUniquePublicBookingCodeAsync(null, ct)
-            );
+            try
+            {
+                var publicBookingCodeResult = await GenerateUniquePublicBookingCodeAsync(null, ct);
+                if (publicBookingCodeResult.IsFailure)
+                    return Result<ServiceDto>.Failure(publicBookingCodeResult.Error);
 
-            var schedules = BuildSchedules(dto.Schedules, service.Capacity.Value);
+                service = Service.Create(
+                    dto.Name,
+                    dto.OwnerId,
+                    slug,
+                    dto.Description,
+                    dto.PhoneNumber,
+                    Location.Create(dto.PlaceName, dto.Address),
+                    dto.ServiceTypeId,
+                    _dateTimeProvider.NowArgentina(),
+                    Duration.Create(dto.DurationMinutes),
+                    Capacity.Create(dto.Capacity),
+                    Mode.Presence,
+                    dto.Price,
+                    publicBookingCodeResult.Data
+                );
 
-            service.SetSchedules(schedules);
+                var schedulesResult = BuildSchedules(dto.Schedules, service.Capacity.Value);
+                if (schedulesResult.IsFailure)
+                    return Result<ServiceDto>.Failure(schedulesResult.Error);
 
-            await _serviceRepository.AddOne(service);
-            await SaveChangesEnsuringUniquePublicBookingCode(service, null, ct);
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+                service.SetSchedules(schedulesResult.Data!);
+
+                await _serviceRepository.AddOne(service);
+                var saveResult = await SaveChangesEnsuringUniquePublicBookingCode(service, null, ct);
+                if (saveResult.IsFailure)
+                    return Result<ServiceDto>.Failure(saveResult.Error);
+            }
+            catch (ConflictException ex)
+            {
+                return Result<ServiceDto>.Failure(Error.Conflict(ex.Message));
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceDto>.Failure(Error.Validation(ex.Message));
+            }
+
+            return Result<ServiceDto>.Success(await BuildServiceDto(service, ct));
         }
 
         public async Task<Result<ServiceDto>> UpdateService(int id, UpdateServiceDto dto, CancellationToken ct = default)
@@ -147,70 +174,59 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
-            ServiceType? nextServiceType = null;
-            if (dto.ServiceTypeId.HasValue)
+            try
             {
-                nextServiceType = await _serviceTypeRepository.GetOne(dto.ServiceTypeId.Value, ct);
-                if (nextServiceType == null)
-                    return Result<ServiceDto>.Failure(Error.NotFound("TipoServicio"));
-            }
+                if (dto.Name != null)
+                {
+                    service.ChangeName(dto.Name);
+                }
+                if (dto.Slug != null)
+                {
+                    var slug = await GenerateUniqueSlugAsync(dto.Slug, id, ct);
+                    service.ChangeSlug(slug);
+                }
+                if (dto.Description != null)
+                {
+                    service.ChangeDescription(dto.Description);
+                }
+                if (dto.PhoneNumber != null)
+                {
+                    service.ChangePhoneNumber(dto.PhoneNumber);
+                }
 
-            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
+                var isLocationBeingUpdated =
+                    dto.PlaceName is not null ||
+                    dto.Address is not null;
 
-            if (dto.Name != null)
-            {
-                service.ChangeName(dto.Name);
-            }
-            if (dto.Slug != null)
-            {
-                var slug = await GenerateUniqueSlugAsync(dto.Slug, id, ct);
-                service.ChangeSlug(slug);
-            }
-            if (!string.IsNullOrWhiteSpace(dto.Description))
-            {
-                service.ChangeDescription(dto.Description);
-            }
-            if (dto.PhoneNumber != null)
-            {
-                service.ChangePhoneNumber(dto.PhoneNumber);
-            }
+                if (isLocationBeingUpdated)
+                {
+                    service.ChangeLocation(
+                        dto.PlaceName ?? service.Location?.PlaceName,
+                        dto.Address ?? service.Location?.Address);
+                }
 
-            var isLocationBeingUpdated =
-                dto.PlaceName is not null ||
-                dto.Address is not null ||
-                dto.GoogleMapsUrl is not null;
+                if (dto.DurationMinutes != null)
+                {
+                    service.ChangeDuration(dto.DurationMinutes.Value);
+                }
+                if (dto.Capacity != null)
+                {
+                    service.ChangeCapacity(dto.Capacity.Value);
+                }
 
-            if (isLocationBeingUpdated)
-            {
-                service.ChangeLocation(
-                    dto.PlaceName ?? service.Location?.PlaceName,
-                    dto.Address ?? service.Location?.Address,
-                    dto.GoogleMapsUrl ?? service.Location?.GoogleMapsUrl);
+                if (dto.Price != null)
+                {
+                    service.ChangePrice(dto.Price.Value);
+                }
             }
-
-            if (dto.DurationMinutes != null)
+            catch (DomainException ex)
             {
-                service.ChangeDuration(dto.DurationMinutes.Value);
-            }
-            if (dto.Capacity != null)
-            {
-                service.ChangeCapacity(dto.Capacity.Value);
-            }
-
-            if (dto.ServiceTypeId.HasValue)
-            {
-                EnsureExtraFieldsAllowed(subscription, nextServiceType!);
-                service.ChangeServiceType(dto.ServiceTypeId.Value);
-            }
-
-            if (dto.Price != null)
-            {
-                service.ChangePrice(dto.Price.Value);
+                return Result<ServiceDto>.Failure(Error.Validation(ex.Message));
             }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+            return Result<ServiceDto>.Success(await BuildServiceDto(service, ct));
         }
 
         public async Task<Result> DeleteService(int id, CancellationToken ct = default)
@@ -242,14 +258,34 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
 
             var now = _dateTimeProvider.NowArgentina();
-            var publicBookingCode = string.IsNullOrWhiteSpace(service.PublicBookingCode)
-                ? await GenerateUniquePublicBookingCodeAsync(service.Id, ct)
-                : null;
 
-            service.EnablePublicBooking(now, publicBookingCode);
+            try
+            {
+                string? publicBookingCode = null;
+                if (string.IsNullOrWhiteSpace(service.PublicBookingCode))
+                {
+                    var publicBookingCodeResult = await GenerateUniquePublicBookingCodeAsync(service.Id, ct);
+                    if (publicBookingCodeResult.IsFailure)
+                        return Result<ServicePublicBookingDto>.Failure(publicBookingCodeResult.Error);
 
-            _serviceRepository.Update(service);
-            await SaveChangesEnsuringUniquePublicBookingCode(service, service.Id, ct);
+                    publicBookingCode = publicBookingCodeResult.Data;
+                }
+
+                service.EnablePublicBooking(now, publicBookingCode);
+
+                _serviceRepository.Update(service);
+                var saveResult = await SaveChangesEnsuringUniquePublicBookingCode(service, service.Id, ct);
+                if (saveResult.IsFailure)
+                    return Result<ServicePublicBookingDto>.Failure(saveResult.Error);
+            }
+            catch (ConflictException ex)
+            {
+                return Result<ServicePublicBookingDto>.Failure(Error.Conflict(ex.Message));
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServicePublicBookingDto>.Failure(Error.Validation(ex.Message));
+            }
 
             return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
         }
@@ -274,12 +310,29 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result<ServicePublicBookingDto>.Failure(Error.NotFound("Servicio"));
 
-            service.RegeneratePublicBookingCode(
-                _dateTimeProvider.NowArgentina(),
-                await GenerateUniquePublicBookingCodeAsync(service.Id, ct));
+            try
+            {
+                var publicBookingCodeResult = await GenerateUniquePublicBookingCodeAsync(service.Id, ct);
+                if (publicBookingCodeResult.IsFailure)
+                    return Result<ServicePublicBookingDto>.Failure(publicBookingCodeResult.Error);
 
-            _serviceRepository.Update(service);
-            await SaveChangesEnsuringUniquePublicBookingCode(service, service.Id, ct);
+                service.RegeneratePublicBookingCode(
+                    _dateTimeProvider.NowArgentina(),
+                    publicBookingCodeResult.Data);
+
+                _serviceRepository.Update(service);
+                var saveResult = await SaveChangesEnsuringUniquePublicBookingCode(service, service.Id, ct);
+                if (saveResult.IsFailure)
+                    return Result<ServicePublicBookingDto>.Failure(saveResult.Error);
+            }
+            catch (ConflictException ex)
+            {
+                return Result<ServicePublicBookingDto>.Failure(Error.Conflict(ex.Message));
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServicePublicBookingDto>.Failure(Error.Validation(ex.Message));
+            }
 
             return Result<ServicePublicBookingDto>.Success(MapPublicBooking(service));
         }
@@ -326,11 +379,18 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 }
             }
 
-            service.AssignSecretaries(secretaryIds);
+            try
+            {
+                service.AssignSecretaries(secretaryIds);
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(service));
+            return Result<ServiceDto>.Success(await BuildServiceDto(service, ct));
         }
 
         public async Task<Result> GrantSecretaryPermission(
@@ -355,7 +415,14 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (secretaryValidation.IsFailure)
                 return secretaryValidation;
 
-            service.GrantSecretaryPermission(secretaryId, permission);
+            try
+            {
+                service.GrantSecretaryPermission(secretaryId, permission);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
@@ -384,7 +451,14 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (secretaryValidation.IsFailure)
                 return secretaryValidation;
 
-            service.RevokeSecretaryPermission(secretaryId, permission);
+            try
+            {
+                service.RevokeSecretaryPermission(secretaryId, permission);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
@@ -409,12 +483,22 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (services == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("Servicio"));
 
-            var schedules = BuildSchedules(dto, services.Capacity.Value);
-            services.SetSchedules(schedules);
+            var schedulesResult = BuildSchedules(dto, services.Capacity.Value);
+            if (schedulesResult.IsFailure)
+                return Result<ServiceDto>.Failure(schedulesResult.Error);
+
+            try
+            {
+                services.SetSchedules(schedulesResult.Data!);
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceRepository.Update(services);
             await _unitOfWork.SaveChanges(ct);
-            return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(services));
+            return Result<ServiceDto>.Success(await BuildServiceDto(services, ct));
         }
 
         // ========== UNAVAILABILITIES ==========
@@ -439,35 +523,52 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (hasOnlyOneTime)
                 return Result.Failure(Error.Validation("Debe indicar hora de inicio y fin, o ninguna."));
 
-            var dateRange = DateRange.Create(dto.StartDate, dto.EndDate);
+            DateRange dateRange;
+            ServiceUnavailability createdUnavailability;
 
-            var timeRange = dto.StartTime.HasValue && dto.EndTime.HasValue
-                ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
-                : null;
+            try
+            {
+                var today = DateOnly.FromDateTime(now);
+                dateRange = DateRange.Create(dto.StartDate, dto.EndDate, today);
 
-            var createdUnavailability = service.AddUnavailability(dateRange, timeRange, dto.Reason);
+                var timeRange = dto.StartTime.HasValue && dto.EndTime.HasValue
+                    ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
+                    : null;
+
+                createdUnavailability = service.AddUnavailability(dateRange, timeRange, dto.Reason);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             var cancelledAppointments = new List<Appointment>();
 
-            if (ShouldCancelAffectedAppointments(dto))
+            var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRangeForUpdate(
+                service.Id,
+                dateRange.Start,
+                dateRange.End,
+                now,
+                ct);
+
+            var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
+            var actorUserId = NormalizeActorUserId(dto.UserId);
+
+            foreach (var appointment in candidateAppointments)
             {
-                var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRangeForUpdate(
-                    service.Id,
-                    dateRange.Start,
-                    dateRange.End,
-                    now,
-                    ct);
+                if (!IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
+                    continue;
 
-                var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
-                var actorUserId = NormalizeActorUserId(dto.UserId);
-
-                foreach (var appointment in candidateAppointments)
+                try
                 {
-                    if (!IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
-                        continue;
-
                     appointment.MarkAsCancel(cancellationReason, now, actorUserId);
-                    cancelledAppointments.Add(appointment);
                 }
+                catch (DomainException ex)
+                {
+                    return Result.Failure(Error.Validation(ex.Message));
+                }
+
+                cancelledAppointments.Add(appointment);
             }
 
             _serviceRepository.Update(service);
@@ -491,7 +592,14 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            service.RemoveUnavailability(unavailabilityId);
+            try
+            {
+                service.RemoveUnavailability(unavailabilityId);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
@@ -555,18 +663,29 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             return Result<List<DateOnly>>.Success(dates.ToList());
         }
 
-        private static List<ServiceSchedule> BuildSchedules(
+        private static Result<List<ServiceSchedule>> BuildSchedules(
             IEnumerable<CreateServiceScheduleDto> schedules,
             int defaultCapacity)
         {
-            return schedules
-                .Select(s =>
-                    ServiceSchedule.Create(
-                        TimeRange.Create(s.StartTime, s.EndTime),
-                        Capacity.Create(s.Capacity ?? defaultCapacity),
-                        Day.Create(s.Day)
-                    ))
-                .ToList();
+            if (schedules is null)
+                return Result<List<ServiceSchedule>>.Failure(Error.Validation("Debe proporcionar al menos un horario."));
+
+            try
+            {
+                return Result<List<ServiceSchedule>>.Success(
+                    schedules
+                        .Select(s =>
+                            ServiceSchedule.Create(
+                                TimeRange.Create(s.StartTime, s.EndTime),
+                                Capacity.Create(s.Capacity ?? defaultCapacity),
+                                Day.Create(s.Day)
+                            ))
+                        .ToList());
+            }
+            catch (DomainException ex)
+            {
+                return Result<List<ServiceSchedule>>.Failure(Error.Validation(ex.Message));
+            }
         }
 
         private async Task<Result> ValidateSecretaryAssignmentAsync(Service service, int secretaryId, CancellationToken ct)
@@ -618,15 +737,12 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 : unavailabilityReason.Trim();
 
             return normalizedReason is null
-                ? "Cancelado por excepcion de agenda del servicio"
-                : $"Cancelado por excepcion de agenda: {normalizedReason}";
+                ? "Cancelado por excepción de agenda del servicio"
+                : $"Cancelado por excepción de agenda: {normalizedReason}";
         }
 
         private static int? NormalizeActorUserId(int? userId)
             => userId.HasValue && userId.Value > 0 ? userId.Value : null;
-
-        private static bool ShouldCancelAffectedAppointments(CreateUnavailabilityDto dto)
-            => dto.CancelAffectedAppointments ?? true;
 
         private async Task<string> GenerateUniqueSlugAsync(string source, int? excludedServiceId, CancellationToken ct)
         {
@@ -654,6 +770,22 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             return subscription;
         }
 
+        private async Task<ServiceDto> BuildServiceDto(Service service, CancellationToken ct)
+        {
+            var serviceType = await _serviceTypeRepository.GetByIdWithFields(service.ServiceTypeId, ct);
+            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
+            var orderedFields = serviceType?.FieldDefinitions
+                .OrderBy(field => field.SortOrder)
+                .ThenBy(field => field.Id)
+                .ToList() ?? [];
+
+            return _mapper.Map<ServiceDto>(service) with
+            {
+                AllowsExtraFields = subscription.Plan.AllowsExtraFields(),
+                FieldDefinitions = _mapper.Map<List<ServiceTypeFieldDefinitionDto>>(orderedFields)
+            };
+        }
+
         private ServicePublicBookingDto MapPublicBooking(Service service)
         {
             return new ServicePublicBookingDto
@@ -667,10 +799,32 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             };
         }
 
-        private static void EnsureExtraFieldsAllowed(Subscription subscription, ServiceType serviceType)
+        private static Result ValidateCanCreateService(Subscription subscription, int currentServices)
         {
-            if (serviceType.HasActiveFields())
-                subscription.EnsureCanUseExtraFields();
+            try
+            {
+                subscription.EnsureCanCreateService(currentServices);
+                return Result.Success();
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+        }
+
+        private static Result EnsureExtraFieldsAllowed(Subscription subscription, ServiceType serviceType)
+        {
+            try
+            {
+                if (serviceType.HasActiveFields())
+                    subscription.EnsureCanUseExtraFields();
+
+                return Result.Success();
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
         }
 
         private string BuildPublicBookingUrl(Service service)
@@ -688,7 +842,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             return $"{baseUrl}{publicBookingPath}/{Uri.EscapeDataString(service.Slug.Value)}/{Uri.EscapeDataString(service.PublicBookingCode)}";
         }
 
-        private async Task<string> GenerateUniquePublicBookingCodeAsync(int? excludedServiceId, CancellationToken ct)
+        private async Task<Result<string>> GenerateUniquePublicBookingCodeAsync(int? excludedServiceId, CancellationToken ct)
         {
             const int maxAttempts = 10;
 
@@ -697,13 +851,13 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 var publicBookingCode = Service.GeneratePublicBookingCode();
 
                 if (!await _serviceRepository.ExistsPublicBookingCode(publicBookingCode, excludedServiceId, ct))
-                    return publicBookingCode;
+                    return Result<string>.Success(publicBookingCode);
             }
 
-            throw new ConflictException("No se pudo generar un codigo publico unico para el servicio.");
+            return Result<string>.Failure(Error.Conflict("No se pudo generar un codigo publico unico para el servicio."));
         }
 
-        private async Task SaveChangesEnsuringUniquePublicBookingCode(Service service, int? excludedServiceId, CancellationToken ct)
+        private async Task<Result> SaveChangesEnsuringUniquePublicBookingCode(Service service, int? excludedServiceId, CancellationToken ct)
         {
             const int maxAttempts = 10;
 
@@ -712,20 +866,24 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 try
                 {
                     await _unitOfWork.SaveChanges(ct);
-                    return;
+                    return Result.Success();
                 }
-                catch (ConflictException)
+                catch (ConflictException ex)
                 {
                     if (!await _serviceRepository.ExistsPublicBookingCode(service.PublicBookingCode, excludedServiceId, ct))
-                        throw;
+                        return Result.Failure(Error.Conflict(ex.Message));
+
+                    var publicBookingCodeResult = await GenerateUniquePublicBookingCodeAsync(excludedServiceId, ct);
+                    if (publicBookingCodeResult.IsFailure)
+                        return Result.Failure(publicBookingCodeResult.Error);
 
                     service.RegeneratePublicBookingCode(
                         _dateTimeProvider.NowArgentina(),
-                        await GenerateUniquePublicBookingCodeAsync(excludedServiceId, ct));
+                        publicBookingCodeResult.Data);
                 }
             }
 
-            throw new ConflictException("No se pudo persistir un codigo publico unico para el servicio.");
+            return Result.Failure(Error.Conflict("No se pudo persistir un codigo publico unico para el servicio."));
         }
 
         private static string Slugify(string value)

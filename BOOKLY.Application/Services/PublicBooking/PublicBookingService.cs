@@ -4,8 +4,10 @@ using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.PublicBooking.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.DomainServices;
+using BOOKLY.Domain.Repositories;
 
 namespace BOOKLY.Application.Services.PublicBooking
 {
@@ -18,6 +20,7 @@ namespace BOOKLY.Application.Services.PublicBooking
         private readonly IServiceRepository _serviceRepository;
         private readonly IServiceTypeRepository _serviceTypeRepository;
         private readonly IUserRepository _userRepository;
+        private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IAppointmentService _appointmentService;
         private readonly IAvailabilityService _availabilityService;
@@ -27,6 +30,7 @@ namespace BOOKLY.Application.Services.PublicBooking
             IServiceRepository serviceRepository,
             IServiceTypeRepository serviceTypeRepository,
             IUserRepository userRepository,
+            ISubscriptionRepository subscriptionRepository,
             IAppointmentRepository appointmentRepository,
             IAppointmentService appointmentService,
             IAvailabilityService availabilityService,
@@ -35,6 +39,7 @@ namespace BOOKLY.Application.Services.PublicBooking
             _serviceRepository = serviceRepository;
             _serviceTypeRepository = serviceTypeRepository;
             _userRepository = userRepository;
+            _subscriptionRepository = subscriptionRepository;
             _appointmentRepository = appointmentRepository;
             _appointmentService = appointmentService;
             _availabilityService = availabilityService;
@@ -53,8 +58,14 @@ namespace BOOKLY.Application.Services.PublicBooking
                 return Result<PublicServiceBookingDto>.Failure(Error.NotFound("TipoServicio"));
 
             var owner = await _userRepository.GetOne(service.OwnerId, ct);
+            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
 
-            return Result<PublicServiceBookingDto>.Success(MapPublicService(service, serviceType, owner));
+            return Result<PublicServiceBookingDto>.Success(
+                MapPublicService(
+                    service,
+                    serviceType,
+                    owner,
+                    subscription.Plan.AllowsExtraFields()));
         }
 
         public async Task<Result<List<DateOnly>>> GetAvailableDates(
@@ -160,7 +171,8 @@ namespace BOOKLY.Application.Services.PublicBooking
         private static PublicServiceBookingDto MapPublicService(
             Service service,
             ServiceType serviceType,
-            BOOKLY.Domain.Aggregates.UserAggregate.User? owner)
+            BOOKLY.Domain.Aggregates.UserAggregate.User? owner,
+            bool allowsExtraFields)
         {
             return new PublicServiceBookingDto
             {
@@ -174,12 +186,12 @@ namespace BOOKLY.Application.Services.PublicBooking
                 PhoneNumber = service.PhoneNumber,
                 PlaceName = service.Location?.PlaceName,
                 Address = service.Location?.Address,
-                GoogleMapsUrl = service.Location?.GoogleMapsUrl,
                 ServiceTypeId = service.ServiceTypeId,
                 DurationMinutes = service.DurationMinutes.Value,
                 Capacity = service.Capacity.Value,
                 Mode = service.Mode.ToString(),
                 Price = service.Price,
+                AllowsExtraFields = allowsExtraFields,
                 FieldDefinitions = serviceType.FieldDefinitions
                     .Where(field => field.IsActive)
                     .OrderBy(field => field.SortOrder)
@@ -208,6 +220,17 @@ namespace BOOKLY.Application.Services.PublicBooking
                     })
                     .ToList()
             };
+        }
+
+        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
+        {
+            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
+            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
+
+            if (subscription == null || !subscription.IsActive(today))
+                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
+
+            return subscription;
         }
     }
 }

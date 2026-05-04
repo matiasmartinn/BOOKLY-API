@@ -25,10 +25,6 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         [StringLength(250, ErrorMessage = "La dirección no puede exceder 250 caracteres")]
         public string? Address { get; init; }
 
-        [Url(ErrorMessage = "La URL de Google Maps no es válida")]
-        [StringLength(500, ErrorMessage = "La URL de Google Maps no puede exceder 500 caracteres")]
-        public string? GoogleMapsUrl { get; init; }
-
         public string? Slug { get; init; }
 
         [Required]

@@ -61,9 +61,7 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> Create([FromBody] CreateServiceTypeDto dto, CancellationToken ct)
         {
             var result = await _serviceTypeService.CreateServiceType(dto, ct);
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Data?.Id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(GetById), new { id = result.Data?.Id });
         }
 
         /// <summary>
@@ -105,9 +103,7 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> AddField(int id, [FromBody] AddServiceTypeFieldDto dto, CancellationToken ct)
         {
             var result = await _serviceTypeService.AddField(id, dto, ct);
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetByIdWithFields), new { id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(GetByIdWithFields), new { id });
         }
 
         /// <summary>
@@ -161,9 +157,7 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> AddOption(int id, int fieldId, [FromBody] AddServiceTypeFieldOptionDto dto, CancellationToken ct)
         {
             var result = await _serviceTypeService.AddOption(id, fieldId, dto, ct);
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetByIdWithFields), new { id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(GetByIdWithFields), new { id });
         }
 
         /// <summary>

@@ -1,6 +1,9 @@
 using BOOKLY.Application.EventHandler;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
+using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
@@ -27,9 +30,10 @@ public sealed class BooklyDbContextDomainEventsTests
         await using var scope = BuildServices(connection).CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
         await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
 
         var appointment = Appointment.Create(
-            1,
+            seed.Service.Id,
             null,
             CreateClient(),
             ReferenceNow.AddDays(1),
@@ -60,9 +64,10 @@ public sealed class BooklyDbContextDomainEventsTests
         await using var scope = BuildServices(connection).CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
         await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
 
         var appointment = Appointment.Create(
-            1,
+            seed.Service.Id,
             null,
             CreateClient(),
             ReferenceNow.AddDays(1),
@@ -98,6 +103,7 @@ public sealed class BooklyDbContextDomainEventsTests
         var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
         var historyRepository = scope.ServiceProvider.GetRequiredService<IAppointmentHistoryRepository>();
         await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
 
         var actor = User.CreateSecretary(
             PersonName.Create("Ada", "Lovelace"),
@@ -108,7 +114,7 @@ public sealed class BooklyDbContextDomainEventsTests
         await context.SaveChangesAsync();
 
         var appointment = Appointment.Create(
-            1,
+            seed.Service.Id,
             null,
             CreateClient(),
             ReferenceNow.AddDays(1),
@@ -133,6 +139,41 @@ public sealed class BooklyDbContextDomainEventsTests
         Assert.Equal("Lovelace", history[0].User!.PersonName.LastName);
     }
 
+    private static async Task<SeedData> SeedAsync(BooklyDbContext context)
+    {
+        var owner = User.CreateOwner(
+            PersonName.Create("Grace", "Hopper"),
+            BOOKLY.Domain.SharedKernel.Email.Create("grace.owner@example.com"),
+            Password.FromHash("hashed-password"),
+            ReferenceNow);
+
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var serviceTypeId = await context.ServiceTypes
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstAsync();
+
+        var service = Service.Create(
+            "Consulta general",
+            owner.Id,
+            "consulta-general",
+            description: null,
+            phoneNumber: null,
+            serviceType: serviceTypeId,
+            createdAt: ReferenceNow,
+            duration: Duration.Create(60),
+            capacity: Capacity.Create(1),
+            mode: Mode.Presence,
+            price: null);
+
+        context.Services.Add(service);
+        await context.SaveChangesAsync();
+
+        return new SeedData(service);
+    }
+
     private static ServiceProvider BuildServices(SqliteConnection connection)
     {
         var services = new ServiceCollection();
@@ -153,4 +194,6 @@ public sealed class BooklyDbContextDomainEventsTests
             "1133344455",
             BOOKLY.Domain.SharedKernel.Email.Create("linus@example.com"));
     }
+
+    private sealed record SeedData(Service Service);
 }

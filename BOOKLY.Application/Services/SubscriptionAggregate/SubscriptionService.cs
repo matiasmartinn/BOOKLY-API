@@ -5,6 +5,7 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.SubscriptionAggregate.Dto;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Repositories;
 
@@ -89,10 +90,17 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(ownerId, ct);
             if (subscription == null)
-                return Result<SubscriptionDto>.Failure(Error.NotFound("SuscripciÃ³n"));
+                return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
             var now = _dateTimeProvider.NowArgentina();
-            subscription.Cancel(now);
+            try
+            {
+                subscription.Cancel(now);
+            }
+            catch (DomainException ex)
+            {
+                return Result<SubscriptionDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _subscriptionRepository.Update(subscription);
             await _unitOfWork.SaveChanges(ct);
@@ -108,16 +116,23 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
             if (subscription == null)
-                return Result<SubscriptionDto>.Failure(Error.NotFound("SuscripciÃ³n"));
+                return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
             var now = _dateTimeProvider.NowArgentina();
-            var newPeriod = CreatePaidMonthlyPeriod(now);
+            try
+            {
+                var newPeriod = CreatePaidMonthlyPeriod(now);
+                subscription.Renew(newPeriod, now);
+            }
+            catch (DomainException ex)
+            {
+                return Result<SubscriptionDto>.Failure(Error.Validation(ex.Message));
+            }
 
-            subscription.Renew(newPeriod, now);
-            _subscriptionRepository.Update(subscription);
+            _subscriptionRepository.Update(subscription!);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
+            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription!, dto.OwnerId, now));
         }
 
         public async Task<Result<SubscriptionDto>> ChangePlan(ChangePlanDto dto, CancellationToken ct = default)
@@ -139,47 +154,54 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
 
-            if (subscription is null)
+            try
             {
+                if (subscription is null)
+                {
+                    if (newPlan.Name == PlanName.Free)
+                    {
+                        var freeSubscription = Subscription.CreateFree(dto.OwnerId, now);
+                        await _subscriptionRepository.AddOne(freeSubscription, ct);
+                        await _unitOfWork.SaveChanges(ct);
+                        return Result<SubscriptionDto>.Success(MapSubscriptionDto(freeSubscription, dto.OwnerId, now));
+                    }
+
+                    var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, paidPeriod!, now);
+                    await _subscriptionRepository.AddOne(paidSubscription, ct);
+                    await _unitOfWork.SaveChanges(ct);
+                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(paidSubscription, dto.OwnerId, now));
+                }
+
+                if (newPlan.Name == subscription.Plan.Name)
+                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
+
                 if (newPlan.Name == PlanName.Free)
                 {
-                    var freeSubscription = Subscription.CreateFree(dto.OwnerId, now);
-                    await _subscriptionRepository.AddOne(freeSubscription, ct);
-                    await _unitOfWork.SaveChanges(ct);
-                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(freeSubscription, dto.OwnerId, now));
-                }
-
-                var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, paidPeriod!, now);
-                await _subscriptionRepository.AddOne(paidSubscription, ct);
-                await _unitOfWork.SaveChanges(ct);
-                return Result<SubscriptionDto>.Success(MapSubscriptionDto(paidSubscription, dto.OwnerId, now));
-            }
-
-            if (newPlan.Name == subscription.Plan.Name)
-                return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
-
-            if (newPlan.Name == PlanName.Free)
-            {
-                var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
-                subscription.ChangeToFree(today, currentServices, currentSecretaries, now);
-            }
-            else if (subscription.Plan.Name == PlanName.Free)
-            {
-                subscription.SwitchFromFreeToPaid(newPlan, paidPeriod!, now);
-            }
-            else
-            {
-                if (newPlan.Name < subscription.Plan.Name)
-                {
                     var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
-                    subscription.DowngradeTo(newPlan, currentServices, currentSecretaries, now);
+                    subscription.ChangeToFree(today, currentServices, currentSecretaries, now);
                 }
-                else if (newPlan.Name > subscription.Plan.Name)
+                else if (subscription.Plan.Name == PlanName.Free)
                 {
-                    subscription.UpgradeTo(newPlan, now);
+                    subscription.SwitchFromFreeToPaid(newPlan, paidPeriod!, now);
                 }
+                else
+                {
+                    if (newPlan.Name < subscription.Plan.Name)
+                    {
+                        var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
+                        subscription.DowngradeTo(newPlan, currentServices, currentSecretaries, now);
+                    }
+                    else if (newPlan.Name > subscription.Plan.Name)
+                    {
+                        subscription.UpgradeTo(newPlan, now);
+                    }
 
-                subscription.Renew(paidPeriod!, now);
+                    subscription.Renew(paidPeriod!, now);
+                }
+            }
+            catch (DomainException ex)
+            {
+                return Result<SubscriptionDto>.Failure(Error.Validation(ex.Message));
             }
 
             _subscriptionRepository.Update(subscription);
@@ -200,10 +222,10 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (!string.IsNullOrWhiteSpace(dto.TargetPlan) && dto.PlanName.HasValue)
             {
                 if (!TryParsePlanName(dto.TargetPlan!, out var parsedPlanName))
-                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
+                    return (null, Error.Validation("El plan indicado es inválido."));
 
                 if (!TryGetDefinedPlanName(dto.PlanName.Value, out var legacyPlanName))
-                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
+                    return (null, Error.Validation("El plan indicado es inválido."));
 
                 if (parsedPlanName != legacyPlanName)
                     return (null, Error.Validation("Los datos del plan son inconsistentes."));
@@ -214,7 +236,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (!string.IsNullOrWhiteSpace(dto.TargetPlan))
             {
                 if (!TryParsePlanName(dto.TargetPlan!, out var parsedPlanName))
-                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
+                    return (null, Error.Validation("El plan indicado es inválido."));
 
                 return (SubscriptionPlan.FromName(parsedPlanName), null);
             }
@@ -222,7 +244,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (dto.PlanName.HasValue)
             {
                 if (!TryGetDefinedPlanName(dto.PlanName.Value, out var legacyPlanName))
-                    return (null, Error.Validation("El plan indicado es invÃ¡lido."));
+                    return (null, Error.Validation("El plan indicado es inválido."));
 
                 return (SubscriptionPlan.FromName(legacyPlanName), null);
             }

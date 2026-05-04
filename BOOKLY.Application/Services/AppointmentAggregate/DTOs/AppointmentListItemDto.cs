@@ -19,5 +19,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate.DTOs
         public string? ClientNotes { get; init; }
         public string? CancelReason { get; init; }
         public DateTime CreatedOn { get; init; }
+        public List<AppointmentFieldValueDto> FieldValues { get; init; } = [];
     }
 }

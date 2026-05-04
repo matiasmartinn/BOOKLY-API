@@ -39,7 +39,7 @@ namespace BOOKLY.Api.Controllers
             if (access.IsFailure)
                 return HandleResult(Result<AppointmentDto>.Failure(access.Error));
 
-            return Ok(access.Data);
+            return HandleResult(access);
         }
 
         /// <summary>
@@ -159,9 +159,7 @@ namespace BOOKLY.Api.Controllers
             dto = dto with { UserId = currentUserId.Data };
             var result = await _appointmentService.CreateAppointment(dto, ct);
 
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(GetById), new { id = result.Data!.Id });
         }
 
         /// <summary>

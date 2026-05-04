@@ -3,8 +3,10 @@ using BOOKLY.Application.Services.MetricsAggregate;
 using BOOKLY.Application.Services.MetricsAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure;
@@ -30,6 +32,7 @@ public sealed class MetricsServiceTests
         await using var scope = BuildServices(connection).CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
         await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
 
         var appointmentRepository = scope.ServiceProvider.GetRequiredService<IAppointmentRepository>();
         var serviceRepository = scope.ServiceProvider.GetRequiredService<IServiceRepository>();
@@ -39,19 +42,16 @@ public sealed class MetricsServiceTests
             new StubUserRepository(),
             CreateMapper());
 
-        var trackedService = CreateService("Masajes", "masajes");
-        var ignoredService = CreateService("Kinesiologia", "kinesiologia");
-
-        context.Services.AddRange(trackedService, ignoredService);
-        await context.SaveChangesAsync();
+        var trackedService = seed.TrackedService;
+        var ignoredService = seed.IgnoredService;
 
         context.Appointments.AddRange(
-            CreateAppointment(trackedService.Id, 10, new DateTime(2026, 3, 23, 9, 0, 0)),
-            CreateAppointment(trackedService.Id, 10, new DateTime(2026, 3, 25, 10, 0, 0)),
-            CreateAppointment(trackedService.Id, 10, new DateTime(2026, 3, 25, 15, 0, 0)),
-            CreateAppointment(trackedService.Id, 10, new DateTime(2026, 3, 29, 12, 0, 0)),
-            CreateAppointment(ignoredService.Id, 10, new DateTime(2026, 3, 24, 11, 0, 0)),
-            CreateAppointment(trackedService.Id, 10, new DateTime(2026, 3, 30, 11, 0, 0)));
+            CreateAppointment(trackedService.Id, seed.Secretary.Id, new DateTime(2026, 3, 23, 9, 0, 0)),
+            CreateAppointment(trackedService.Id, seed.Secretary.Id, new DateTime(2026, 3, 25, 10, 0, 0)),
+            CreateAppointment(trackedService.Id, seed.Secretary.Id, new DateTime(2026, 3, 25, 15, 0, 0)),
+            CreateAppointment(trackedService.Id, seed.Secretary.Id, new DateTime(2026, 3, 29, 12, 0, 0)),
+            CreateAppointment(ignoredService.Id, seed.Secretary.Id, new DateTime(2026, 3, 24, 11, 0, 0)),
+            CreateAppointment(trackedService.Id, seed.Secretary.Id, new DateTime(2026, 3, 30, 11, 0, 0)));
         await context.SaveChangesAsync();
 
         var result = await metricsService.GetAppointmentMetrics(new AppointmentMetricsQueryDto
@@ -111,6 +111,36 @@ public sealed class MetricsServiceTests
         Assert.Equal(24, metrics.AppointmentsByHour.Count);
     }
 
+    private static async Task<SeedData> SeedAsync(BooklyDbContext context)
+    {
+        var owner = User.CreateOwner(
+            PersonName.Create("Ada", "Lovelace"),
+            BOOKLY.Domain.SharedKernel.Email.Create("ada.metrics@example.com"),
+            Password.FromHash("hashed-password"),
+            CreationNow);
+
+        var secretary = User.CreateSecretary(
+            PersonName.Create("Grace", "Hopper"),
+            BOOKLY.Domain.SharedKernel.Email.Create("grace.metrics@example.com"),
+            CreationNow);
+
+        context.Users.AddRange(owner, secretary);
+        await context.SaveChangesAsync();
+
+        var serviceTypeId = await context.ServiceTypes
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstAsync();
+
+        var trackedService = CreateService("Masajes", "masajes", owner.Id, serviceTypeId);
+        var ignoredService = CreateService("Kinesiologia", "kinesiologia", owner.Id, serviceTypeId);
+
+        context.Services.AddRange(trackedService, ignoredService);
+        await context.SaveChangesAsync();
+
+        return new SeedData(owner, secretary, trackedService, ignoredService);
+    }
+
     private static ServiceProvider BuildServices(SqliteConnection connection)
     {
         var services = new ServiceCollection();
@@ -138,15 +168,16 @@ public sealed class MetricsServiceTests
             CreationNow);
     }
 
-    private static Service CreateService(string name, string slug)
+    private static Service CreateService(string name, string slug, int ownerId, int serviceTypeId)
     {
         return Service.Create(
             name,
-            userId: 99,
+            userId: ownerId,
             slug: slug,
             description: null,
+            phoneNumber: null,
             location: null,
-            serviceType: 1,
+            serviceType: serviceTypeId,
             createdAt: CreationNow,
             duration: Duration.Create(60),
             capacity: Capacity.Create(1),
@@ -159,6 +190,12 @@ public sealed class MetricsServiceTests
         var configuration = new MapperConfiguration(cfg => cfg.AddMaps(typeof(MetricsService).Assembly));
         return configuration.CreateMapper();
     }
+
+    private sealed record SeedData(
+        User Owner,
+        User Secretary,
+        Service TrackedService,
+        Service IgnoredService);
 
     private sealed class StubUserRepository : IUserRepository
     {

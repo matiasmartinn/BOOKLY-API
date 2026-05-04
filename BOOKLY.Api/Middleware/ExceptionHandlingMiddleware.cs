@@ -54,17 +54,19 @@ namespace BOOKLY.Api.Middleware
             string detail)
         {
             context.Response.StatusCode = (int)statusCode;
+            var problemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Status = (int)statusCode,
+                Title = title,
+                Detail = detail,
+                Instance = context.Request.Path
+            };
+            problemDetails.Extensions["traceId"] = context.TraceIdentifier;
 
             await _problemDetailsService.WriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
-                ProblemDetails =
-                {
-                    Status = (int)statusCode,
-                    Title = title,
-                    Detail = detail,
-                    Instance = context.Request.Path
-                }
+                ProblemDetails = problemDetails
             });
         }
     }

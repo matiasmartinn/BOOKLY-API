@@ -127,10 +127,9 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 Name = name.Trim();
         }
 
-        public void ChangeDescription(string description)
+        public void ChangeDescription(string? description)
         {
-            ValidateString(description, "descripcion");
-            Description = description.Trim();
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         }
 
         public void ChangePhoneNumber(string? phoneNumber)
@@ -138,9 +137,9 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             PhoneNumber = NormalizeOptionalPhoneNumber(phoneNumber);
         }
 
-        public void ChangeLocation(string? placeName, string? address, string? googleMapsUrl)
+        public void ChangeLocation(string? placeName, string? address)
         {
-            Location = Location.Create(placeName, address, googleMapsUrl);
+            Location = Location.Create(placeName, address);
         }
 
         public void ChangeSlug(string slug)
@@ -168,14 +167,6 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             if (Price != price)
                 Price = price;
         }
-        public void ChangeServiceType(int serviceTypeId)
-        {
-            if (serviceTypeId <= 0)
-                throw new DomainException("EL tipo de servicio es requerido.");
-
-            ServiceTypeId = serviceTypeId;
-        }
-
         public void Deactivate()
         {
             IsActive = false;

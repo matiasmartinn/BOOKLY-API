@@ -1,4 +1,9 @@
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
 using BOOKLY.Infrastructure;
@@ -23,13 +28,14 @@ public sealed class AppointmentRepositoryMetricsTests
         await using var scope = BuildServices(connection).CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
         await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
 
         var repository = scope.ServiceProvider.GetRequiredService<IAppointmentRepository>();
 
-        var pending = CreateAppointment(1, 10, new DateTime(2026, 3, 20, 9, 0, 0));
-        var cancelled = CreateAppointment(1, 10, new DateTime(2026, 3, 20, 10, 0, 0));
-        var attended = CreateAppointment(1, 11, new DateTime(2026, 3, 21, 9, 0, 0));
-        var noShow = CreateAppointment(2, 10, new DateTime(2026, 3, 21, 11, 0, 0));
+        var pending = CreateAppointment(seed.TrackedService.Id, seed.SecretaryA.Id, new DateTime(2026, 3, 20, 9, 0, 0));
+        var cancelled = CreateAppointment(seed.TrackedService.Id, seed.SecretaryA.Id, new DateTime(2026, 3, 20, 10, 0, 0));
+        var attended = CreateAppointment(seed.TrackedService.Id, seed.SecretaryB.Id, new DateTime(2026, 3, 21, 9, 0, 0));
+        var noShow = CreateAppointment(seed.IgnoredService.Id, seed.SecretaryA.Id, new DateTime(2026, 3, 21, 11, 0, 0));
 
         context.Appointments.AddRange(pending, cancelled, attended, noShow);
         await context.SaveChangesAsync();
@@ -41,15 +47,15 @@ public sealed class AppointmentRepositoryMetricsTests
         context.Appointments.UpdateRange(cancelled, attended, noShow);
         await context.SaveChangesAsync();
 
-        var serviceIds = new[] { 1 };
+        var serviceIds = new[] { seed.TrackedService.Id };
         var from = new DateOnly(2026, 3, 20);
         var to = new DateOnly(2026, 3, 21);
 
-        var total = await repository.CountByServices(serviceIds, from, to, 10);
-        var statusCounts = await repository.GetStatusCountsByServices(serviceIds, from, to, 10);
-        var dayCounts = await repository.GetDayCountsByServices(serviceIds, from, to, 10);
-        var hourCounts = await repository.GetHourCountsByServices(serviceIds, from, to, 10);
-        var weekdayCounts = await repository.GetWeekdayCountsByServices(serviceIds, from, to, 10);
+        var total = await repository.CountByServices(serviceIds, from, to, seed.SecretaryA.Id);
+        var statusCounts = await repository.GetStatusCountsByServices(serviceIds, from, to, seed.SecretaryA.Id);
+        var dayCounts = await repository.GetDayCountsByServices(serviceIds, from, to, seed.SecretaryA.Id);
+        var hourCounts = await repository.GetHourCountsByServices(serviceIds, from, to, seed.SecretaryA.Id);
+        var weekdayCounts = await repository.GetWeekdayCountsByServices(serviceIds, from, to, seed.SecretaryA.Id);
 
         Assert.Equal(2, total);
         Assert.Equal(2, statusCounts.Count);
@@ -64,6 +70,41 @@ public sealed class AppointmentRepositoryMetricsTests
         var weekdayCount = Assert.Single(weekdayCounts);
         Assert.Equal((int)DayOfWeek.Friday, weekdayCount.DayOfWeek);
         Assert.Equal(2, weekdayCount.TotalAppointments);
+    }
+
+    private static async Task<SeedData> SeedAsync(BooklyDbContext context)
+    {
+        var owner = User.CreateOwner(
+            PersonName.Create("Ada", "Lovelace"),
+            BOOKLY.Domain.SharedKernel.Email.Create("ada.metrics@example.com"),
+            Password.FromHash("hashed-password"),
+            CreationNow);
+
+        var secretaryA = User.CreateSecretary(
+            PersonName.Create("Grace", "Hopper"),
+            BOOKLY.Domain.SharedKernel.Email.Create("grace.metrics@example.com"),
+            CreationNow);
+
+        var secretaryB = User.CreateSecretary(
+            PersonName.Create("Katherine", "Johnson"),
+            BOOKLY.Domain.SharedKernel.Email.Create("katherine.metrics@example.com"),
+            CreationNow);
+
+        context.Users.AddRange(owner, secretaryA, secretaryB);
+        await context.SaveChangesAsync();
+
+        var serviceTypeId = await context.ServiceTypes
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstAsync();
+
+        var trackedService = CreateService("Masajes", "masajes", owner.Id, serviceTypeId);
+        var ignoredService = CreateService("Kinesiologia", "kinesiologia", owner.Id, serviceTypeId);
+
+        context.Services.AddRange(trackedService, ignoredService);
+        await context.SaveChangesAsync();
+
+        return new SeedData(owner, secretaryA, secretaryB, trackedService, ignoredService);
     }
 
     private static ServiceProvider BuildServices(SqliteConnection connection)
@@ -91,4 +132,27 @@ public sealed class AppointmentRepositoryMetricsTests
             null,
             CreationNow);
     }
+
+    private static Service CreateService(string name, string slug, int ownerId, int serviceTypeId)
+    {
+        return Service.Create(
+            name,
+            ownerId,
+            slug,
+            description: null,
+            phoneNumber: null,
+            serviceType: serviceTypeId,
+            createdAt: CreationNow,
+            duration: Duration.Create(60),
+            capacity: Capacity.Create(1),
+            mode: Mode.Presence,
+            price: null);
+    }
+
+    private sealed record SeedData(
+        User Owner,
+        User SecretaryA,
+        User SecretaryB,
+        Service TrackedService,
+        Service IgnoredService);
 }

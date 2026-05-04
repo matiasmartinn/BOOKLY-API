@@ -5,6 +5,7 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.ServiceTypeAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
+using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -56,10 +57,18 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
         public async Task<Result<ServiceTypeDto>> CreateServiceType(CreateServiceTypeDto dto, CancellationToken ct = default)
         {
-            var serviceType = ServiceType.Create(
-                dto.Name,
-                dto.Description
-            );
+            ServiceType serviceType;
+            try
+            {
+                serviceType = ServiceType.Create(
+                    dto.Name,
+                    dto.Description
+                );
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
 
             await _serviceTypeRepository.AddOne(serviceType, ct);
             await _unitOfWork.SaveChanges(ct);
@@ -73,11 +82,18 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            if (dto.Name != null)
-                serviceType.ChangeName(dto.Name);
+            try
+            {
+                if (dto.Name != null)
+                    serviceType.ChangeName(dto.Name);
 
-            if (dto.Description != null)
-                serviceType.ChangeDescription(dto.Description);
+                if (dto.Description != null)
+                    serviceType.ChangeDescription(dto.Description);
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
@@ -108,14 +124,24 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.AddField(
-                dto.Key,
-                dto.Label,
-                (ServiceFieldType)dto.FieldType,
-                dto.IsRequired,
-                dto.SortOrder,
-                _dateTimeProvider.UtcNow(),
-                dto.Description);
+            if (!IsValidFieldType(dto.FieldType))
+                return Result<ServiceTypeDto>.Failure(Error.Validation("El tipo de campo indicado no es valido."));
+
+            try
+            {
+                serviceType.AddField(
+                    dto.Key,
+                    dto.Label,
+                    (ServiceFieldType)dto.FieldType,
+                    dto.IsRequired,
+                    dto.SortOrder,
+                    _dateTimeProvider.UtcNow(),
+                    dto.Description);
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
@@ -129,18 +155,28 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            if (dto.Label != null || dto.Description != null || dto.IsRequired.HasValue || dto.SortOrder.HasValue)
-            {
-                serviceType.UpdateField(
-                    fieldId,
-                    dto.Label,
-                    dto.Description,
-                    dto.IsRequired,
-                    dto.SortOrder);
-            }
+            if (dto.FieldType.HasValue && !IsValidFieldType(dto.FieldType.Value))
+                return Result<ServiceTypeDto>.Failure(Error.Validation("El tipo de campo indicado no es valido."));
 
-            if (dto.FieldType.HasValue)
-                serviceType.ChangeFieldType(fieldId, (ServiceFieldType)dto.FieldType.Value);
+            try
+            {
+                if (dto.Label != null || dto.Description != null || dto.IsRequired.HasValue || dto.SortOrder.HasValue)
+                {
+                    serviceType.UpdateField(
+                        fieldId,
+                        dto.Label,
+                        dto.Description,
+                        dto.IsRequired,
+                        dto.SortOrder);
+                }
+
+                if (dto.FieldType.HasValue)
+                    serviceType.ChangeFieldType(fieldId, (ServiceFieldType)dto.FieldType.Value);
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
 
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
@@ -154,7 +190,14 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.RemoveField(fieldId);
+            try
+            {
+                serviceType.RemoveField(fieldId);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -167,7 +210,14 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.ActivateField(fieldId);
+            try
+            {
+                serviceType.ActivateField(fieldId);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -184,7 +234,15 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+            try
+            {
+                serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
+
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -197,7 +255,15 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result<ServiceTypeDto>.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+            try
+            {
+                serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+            }
+            catch (DomainException ex)
+            {
+                return Result<ServiceTypeDto>.Failure(Error.Validation(ex.Message));
+            }
+
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -210,7 +276,15 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.RemoveOptionFromField(fieldId, optionId);
+            try
+            {
+                serviceType.RemoveOptionFromField(fieldId, optionId);
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -223,7 +297,15 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.DeactivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+            try
+            {
+                serviceType.DeactivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
@@ -236,11 +318,22 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             if (serviceType == null)
                 return Result.Failure(Error.NotFound("TipoServicio"));
 
-            serviceType.ActivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+            try
+            {
+                serviceType.ActivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+            }
+            catch (DomainException ex)
+            {
+                return Result.Failure(Error.Validation(ex.Message));
+            }
+
             _serviceTypeRepository.Update(serviceType);
             await _unitOfWork.SaveChanges(ct);
 
             return Result.Success();
         }
+
+        private static bool IsValidFieldType(int fieldType)
+            => System.Enum.IsDefined(typeof(ServiceFieldType), fieldType);
     }
 }

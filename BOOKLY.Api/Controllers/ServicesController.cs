@@ -34,7 +34,7 @@ namespace BOOKLY.Api.Controllers
             if (accessResult.IsFailure)
                 return HandleResult(Result<ServiceDto>.Failure(accessResult.Error));
 
-            return Ok(accessResult.Data);
+            return HandleResult(accessResult);
         }
 
         /// <summary>
@@ -65,9 +65,7 @@ namespace BOOKLY.Api.Controllers
                 return HandleResult(access);
 
             var result = await _serviceApplicationService.CreateService(dto, ct);
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Data?.Id }, result.Data)
-                : HandleResult(result);
+            return HandleCreated(result, nameof(GetById), new { id = result.Data?.Id });
         }
 
         /// <summary>
