@@ -160,9 +160,9 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             Capacity = ValueObjects.Capacity.Create(capacity);
         }
 
-        public void ChangePrice(decimal price)
+        public void ChangePrice(decimal? price)
         {
-            if (price < 0)
+            if (price.HasValue && price.Value < 0)
                 throw new DomainException("El precio tiene que ser mayor a 0.");
             if (Price != price)
                 Price = price;

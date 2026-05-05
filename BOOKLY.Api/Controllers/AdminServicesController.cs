@@ -30,6 +30,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Enable(int id, CancellationToken ct)
         {
             return HandleResult(await _adminServicesService.EnableService(id, ct));

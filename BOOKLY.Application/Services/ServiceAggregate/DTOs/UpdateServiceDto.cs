@@ -1,4 +1,6 @@
-﻿namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
+using System.Text.Json.Serialization;
+
+namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
 {
     /// <summary>
     /// DTO para actualizar un servicio existente
@@ -15,5 +17,8 @@
         public int? Capacity { get; init; }
         public int? Mode { get; init; }
         public decimal? Price { get; init; }
+
+        [JsonIgnore]
+        public bool PriceWasProvided { get; init; }
     }
 }

@@ -226,7 +226,6 @@ public sealed class AppointmentServiceTests
             CreateMapper(),
             new FakeUnitOfWork(),
             new StubDateTimeProvider(),
-            new ServiceAuthorizationService(),
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -325,6 +324,9 @@ public sealed class AppointmentServiceTests
 
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
+
+        public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default)
+            => Task.FromResult(_appointment?.ServiceId == serviceId);
 
         public Task<IReadOnlyCollection<Appointment>> SearchByServices(IReadOnlyCollection<int> serviceIds, DateOnly? from, DateOnly? to, AppointmentStatus? status, string? clientSearch, string? clientEmail, bool orderDescending, CancellationToken ct = default)
             => throw new NotImplementedException();

@@ -5,6 +5,7 @@ using BOOKLY.Application.Services.ServiceAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace BOOKLY.Api.Controllers
 {
@@ -75,21 +76,34 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> Update(int id, [FromBody] UpdateServiceDto dto, CancellationToken ct)
+        public async Task<IActionResult> Update(int id, [FromBody] JsonElement request, CancellationToken ct)
         {
             var access = await EnsureServiceAccess(id, allowSecretary: false, ct);
             if (access.IsFailure)
                 return HandleResult(Result<ServiceDto>.Failure(access.Error));
 
+            if (request.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+                return HandleResult(Result<ServiceDto>.Failure(Error.Validation("Los datos del servicio son requeridos.")));
+
+            var dto = JsonSerializer.Deserialize<UpdateServiceDto>(
+                request.GetRawText(),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+            if (dto is null)
+                return HandleResult(Result<ServiceDto>.Failure(Error.Validation("Los datos del servicio son requeridos.")));
+
+            dto = dto with { PriceWasProvided = HasJsonProperty(request, "price") };
+
             return HandleResult(await _serviceApplicationService.UpdateService(id, dto, ct));
         }
 
         /// <summary>
-        /// Elimina lógicamente un servicio del sistema.
+        /// Elimina fisicamente un servicio sin turnos asociados.
         /// </summary>
         [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Delete(int id, CancellationToken ct)
         {
             var access = await EnsureServiceAccess(id, allowSecretary: false, ct);
@@ -440,6 +454,16 @@ namespace BOOKLY.Api.Controllers
                 SecretaryPermission.ManageSchedules => "No tienes permisos para gestionar horarios y excepciones en este servicio.",
                 _ => "No tienes permisos para realizar esta accion en este servicio.",
             };
+        }
+
+        private static bool HasJsonProperty(JsonElement request, string propertyName)
+        {
+            if (request.ValueKind != JsonValueKind.Object)
+                return false;
+
+            return request
+                .EnumerateObject()
+                .Any(property => string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
         }
     }
 }

@@ -104,7 +104,6 @@ public sealed class AppointmentSearchCreatedByTests
             CreateMapper(),
             new FakeUnitOfWork(),
             new StubDateTimeProvider(),
-            new ServiceAuthorizationService(),
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -209,6 +208,9 @@ public sealed class AppointmentSearchCreatedByTests
 
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
+
+        public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default)
+            => Task.FromResult(appointments.Any(a => a.ServiceId == serviceId));
 
         public Task<IReadOnlyCollection<Appointment>> SearchByServices(
             IReadOnlyCollection<int> serviceIds,

@@ -1,9 +1,11 @@
+using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AuthAggregate.DTOs;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace BOOKLY.Api.Controllers
 {
@@ -13,13 +15,19 @@ namespace BOOKLY.Api.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IUserService _userService;
+        private readonly AuthOptions _authOptions;
+        private readonly IWebHostEnvironment _environment;
 
         public AuthController(
             IAuthService authService,
-            IUserService userService)
+            IUserService userService,
+            IOptions<AuthOptions> authOptions,
+            IWebHostEnvironment environment)
         {
             _authService = authService;
             _userService = userService;
+            _authOptions = authOptions.Value;
+            _environment = environment;
         }
 
         [AllowAnonymous]
@@ -28,25 +36,44 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
         {
-            return HandleResult(await _authService.Login(request, ct));
+            return HandleAuthResult(await _authService.Login(request, ct));
         }
 
         [AllowAnonymous]
         [HttpPost("refresh")]
         [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Refresh([FromBody] RefreshRequest request, CancellationToken ct)
+        public async Task<IActionResult> Refresh(CancellationToken ct)
         {
-            return HandleResult(await _authService.Refresh(request, ct));
+            var refreshToken = Request.Cookies[GetRefreshTokenCookieName()];
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                return HandleResult(
+                    Result<LoginResponse>.Failure(Error.Unauthorized("El refresh token es requerido.")));
+            }
+
+            var result = await _authService.Refresh(refreshToken, ct);
+            if (result.IsFailure)
+            {
+                DeleteRefreshTokenCookie();
+            }
+
+            return HandleAuthResult(result);
         }
 
         [AllowAnonymous]
         [HttpPost("logout")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Logout([FromBody] RefreshRequest request, CancellationToken ct)
+        public async Task<IActionResult> Logout(CancellationToken ct)
         {
-            return HandleResult(await _authService.Logout(request.RefreshToken, ct));
+            var refreshToken = Request.Cookies[GetRefreshTokenCookieName()];
+            var result = string.IsNullOrWhiteSpace(refreshToken)
+                ? Result.Success()
+                : await _authService.Logout(refreshToken, ct);
+
+            DeleteRefreshTokenCookie();
+            return HandleResult(result);
         }
 
         [AllowAnonymous]
@@ -104,6 +131,86 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> CompleteSecretaryInvitation([FromBody] CompleteSecretaryInvitationDto dto, CancellationToken ct)
         {
             return HandleResult(await _userService.CompleteInvitation(dto, ct));
+        }
+
+        private IActionResult HandleAuthResult(Result<AuthResult> result)
+        {
+            if (result.IsFailure)
+            {
+                return HandleResult(Result<LoginResponse>.Failure(result.Error));
+            }
+
+            AppendRefreshTokenCookie(result.Data!.RefreshToken);
+            return HandleResult(Result<LoginResponse>.Success(result.Data.Response));
+        }
+
+        private void AppendRefreshTokenCookie(string refreshToken)
+        {
+            Response.Cookies.Append(
+                GetRefreshTokenCookieName(),
+                refreshToken,
+                CreateRefreshTokenCookieOptions(includeLifetime: true));
+        }
+
+        private void DeleteRefreshTokenCookie()
+        {
+            Response.Cookies.Delete(
+                GetRefreshTokenCookieName(),
+                CreateRefreshTokenCookieOptions(includeLifetime: false));
+        }
+
+        private CookieOptions CreateRefreshTokenCookieOptions(bool includeLifetime)
+        {
+            var options = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = UseSecureCookies(),
+                SameSite = GetCookieSameSite(),
+                Path = GetRefreshTokenCookiePath(),
+                IsEssential = true
+            };
+
+            if (includeLifetime)
+            {
+                var lifetime = TimeSpan.FromDays(GetRefreshTokenDays());
+                options.Expires = DateTimeOffset.UtcNow.Add(lifetime);
+                options.MaxAge = lifetime;
+            }
+
+            return options;
+        }
+
+        private string GetRefreshTokenCookieName()
+            => string.IsNullOrWhiteSpace(_authOptions.RefreshTokenCookieName)
+                ? AuthOptions.DefaultRefreshTokenCookieName
+                : _authOptions.RefreshTokenCookieName;
+
+        private string GetRefreshTokenCookiePath()
+            => string.IsNullOrWhiteSpace(_authOptions.RefreshTokenCookiePath)
+                ? AuthOptions.DefaultRefreshTokenCookiePath
+                : _authOptions.RefreshTokenCookiePath;
+
+        private int GetRefreshTokenDays()
+            => _authOptions.RefreshTokenDays > 0
+                ? _authOptions.RefreshTokenDays
+                : AuthOptions.DefaultRefreshTokenDays;
+
+        private bool UseSecureCookies()
+            => _authOptions.UseSecureCookies ?? !_environment.IsDevelopment();
+
+        private SameSiteMode GetCookieSameSite()
+        {
+            var configuredSameSite = _authOptions.CookieSameSite;
+            if (string.IsNullOrWhiteSpace(configuredSameSite))
+            {
+                configuredSameSite = _environment.IsDevelopment()
+                    ? AuthOptions.DefaultCookieSameSite
+                    : nameof(SameSiteMode.None);
+            }
+
+            return Enum.TryParse<SameSiteMode>(configuredSameSite, ignoreCase: true, out var sameSite)
+                ? sameSite
+                : SameSiteMode.Lax;
         }
     }
 }

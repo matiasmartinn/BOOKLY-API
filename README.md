@@ -140,6 +140,12 @@ Ejemplo mínimo:
 - `Frontend:BaseUrl` y paths relacionados: necesaria para construir links de confirmación, recuperación e invitaciones.
 - `Email:*`: secundaria en términos de README, pero necesaria si quieres validar end-to-end confirmación de email, reset de contraseña o invitaciones. No hace falta convertir SMTP en el foco de la puesta en marcha.
 
+### Seed de administrador local/demo
+
+Al iniciar la API se ejecuta un seed de datos base que incluye tipos de servicio y un usuario `Admin` inicial para poder usar el sistema en entorno local o demo de tesis sin pasos manuales extra.
+
+Ese usuario inicial es una comodidad de desarrollo. En un entorno productivo no debe usarse una credencial fija: el alta del primer administrador deberia configurarse con secretos del entorno, una tarea controlada de bootstrap o un procedimiento manual seguro.
+
 ## Comandos útiles
 
 Desde la raíz de este repositorio:

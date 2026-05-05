@@ -50,6 +50,28 @@ public sealed class ServiceApplicationServiceTests
     }
 
     [Fact]
+    public async Task CreateService_ShouldRejectWhenActiveServiceLimitIsReached()
+    {
+        var owner = CreateConfirmedOwner("limit@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 1);
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null));
+
+        var result = await sut.CreateService(CreateServiceDto(owner.Id, serviceType.Id, "Servicio extra"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.Conflict, result.Error.Type);
+        Assert.Equal(
+            "Alcanzaste el máximo de servicios activos permitidos por tu plan.",
+            result.Error.Message);
+        Assert.Null(serviceRepository.AddedService);
+    }
+
+    [Fact]
     public async Task CreateService_ShouldRejectDisabledOwner()
     {
         var owner = CreateConfirmedOwner("grace@example.com");
@@ -69,6 +91,81 @@ public sealed class ServiceApplicationServiceTests
         Assert.Equal(ErrorType.Validation, result.Error.Type);
         Assert.Equal("El owner debe estar habilitado para crear servicios.", result.Error.Message);
         Assert.Null(serviceRepository.AddedService);
+    }
+
+    [Fact]
+    public async Task Activate_ShouldRejectInactiveServiceWhenActiveServiceLimitIsReached()
+    {
+        var owner = CreateConfirmedOwner("reactivate-limit@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var service = CreateStoredService(owner.Id, serviceType.Id, "Servicio inactivo", "servicio-inactivo");
+        service.Deactivate();
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 1)
+        {
+            StoredService = service
+        };
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null));
+
+        var result = await sut.Activate(service.Id);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.Conflict, result.Error.Type);
+        Assert.Equal(
+            "Alcanzaste el máximo de servicios activos permitidos por tu plan.",
+            result.Error.Message);
+        Assert.False(service.IsActive);
+        Assert.Null(serviceRepository.AddedService);
+    }
+
+    [Fact]
+    public async Task Activate_ShouldEnableInactiveServiceWhenActiveServiceLimitAllowsIt()
+    {
+        var owner = CreateConfirmedOwner("reactivate-ok@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var service = CreateStoredService(owner.Id, serviceType.Id, "Servicio reactivable", "servicio-reactivable");
+        service.Deactivate();
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 0)
+        {
+            StoredService = service
+        };
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null));
+
+        var result = await sut.Activate(service.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(service.IsActive);
+        Assert.Same(service, serviceRepository.AddedService);
+    }
+
+    [Fact]
+    public async Task Deactivate_ShouldBeAllowedWhenActiveServiceLimitIsReached()
+    {
+        var owner = CreateConfirmedOwner("deactivate-limit@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var service = CreateStoredService(owner.Id, serviceType.Id, "Servicio activo", "servicio-activo");
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 1)
+        {
+            StoredService = service
+        };
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null));
+
+        var result = await sut.Deactivate(service.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(service.IsActive);
+        Assert.Same(service, serviceRepository.AddedService);
     }
 
     [Fact]
@@ -110,6 +207,83 @@ public sealed class ServiceApplicationServiceTests
         Assert.True(serviceRepository.ExistsPublicBookingCodeCallCount >= 2);
     }
 
+    [Fact]
+    public async Task DeleteService_ShouldRejectWhenAppointmentsExist()
+    {
+        var owner = CreateConfirmedOwner("delete-owner@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var service = Service.Create(
+            "Servicio con turnos",
+            owner.Id,
+            "servicio-con-turnos",
+            null,
+            null,
+            serviceType.Id,
+            ReferenceNow,
+            Duration.Create(60),
+            Capacity.Create(1),
+            Mode.Presence,
+            1000m,
+            "FIXED123");
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 1)
+        {
+            StoredService = service
+        };
+
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null),
+            appointmentRepository: new FakeAppointmentRepository(hasAppointmentsForService: true));
+
+        var result = await sut.DeleteService(service.Id);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ErrorType.Conflict, result.Error.Type);
+        Assert.Equal(
+            "No se puede eliminar un servicio con turnos asociados. Puedes desactivarlo para impedir nuevas reservas y conservar el historial.",
+            result.Error.Message);
+        Assert.Null(serviceRepository.RemovedService);
+    }
+
+    [Fact]
+    public async Task DeleteService_ShouldRemoveServiceWhenNoAppointmentsExist()
+    {
+        var owner = CreateConfirmedOwner("remove-owner@example.com");
+        var serviceType = ServiceType.Create("Consulta");
+        var service = Service.Create(
+            "Servicio sin turnos",
+            owner.Id,
+            "servicio-sin-turnos",
+            null,
+            null,
+            serviceType.Id,
+            ReferenceNow,
+            Duration.Create(60),
+            Capacity.Create(1),
+            Mode.Presence,
+            1000m,
+            "FIXED123");
+        var serviceRepository = new FakeServiceRepository(activeServiceCount: 1)
+        {
+            StoredService = service
+        };
+
+        var sut = CreateSut(
+            serviceRepository,
+            new FakeUserRepository(owner),
+            new FakeServiceTypeRepository(serviceType),
+            subscriptionRepository: new FakeSubscriptionRepository(null),
+            appointmentRepository: new FakeAppointmentRepository(hasAppointmentsForService: false));
+
+        var result = await sut.DeleteService(service.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Same(service, serviceRepository.RemovedService);
+        Assert.Null(serviceRepository.StoredService);
+    }
+
     private static CreateServiceDto CreateServiceDto(int ownerId, int serviceTypeId, string name)
     {
         return new CreateServiceDto
@@ -133,6 +307,23 @@ public sealed class ServiceApplicationServiceTests
         };
     }
 
+    private static Service CreateStoredService(int ownerId, int serviceTypeId, string name, string slug)
+    {
+        return Service.Create(
+            name,
+            ownerId,
+            slug,
+            null,
+            null,
+            serviceTypeId,
+            ReferenceNow,
+            Duration.Create(60),
+            Capacity.Create(1),
+            Mode.Presence,
+            1000m,
+            "FIXED123");
+    }
+
     private static User CreateConfirmedOwner(string email)
     {
         var owner = User.CreateOwner(
@@ -150,11 +341,12 @@ public sealed class ServiceApplicationServiceTests
         FakeServiceRepository serviceRepository,
         FakeUserRepository userRepository,
         FakeServiceTypeRepository serviceTypeRepository,
-        FakeSubscriptionRepository subscriptionRepository)
+        FakeSubscriptionRepository subscriptionRepository,
+        FakeAppointmentRepository? appointmentRepository = null)
     {
         return new ServiceApplicationService(
             serviceRepository,
-            new FakeAppointmentRepository(),
+            appointmentRepository ?? new FakeAppointmentRepository(),
             new FakeAvailabilityService(),
             userRepository,
             serviceTypeRepository,
@@ -184,6 +376,7 @@ public sealed class ServiceApplicationServiceTests
         }
 
         public Service? AddedService { get; private set; }
+        public Service? RemovedService { get; private set; }
         public Service? StoredService { get; set; }
         public int ExistsPublicBookingCodeCallCount { get; private set; }
 
@@ -233,7 +426,12 @@ public sealed class ServiceApplicationServiceTests
             AddedService = service;
             StoredService = service;
         }
-        public void Remove(Service service) => throw new NotImplementedException();
+        public void Remove(Service service)
+        {
+            RemovedService = service;
+            if (ReferenceEquals(StoredService, service))
+                StoredService = null;
+        }
     }
 
     private sealed class FakeUserRepository(User owner) : IUserRepository
@@ -272,12 +470,13 @@ public sealed class ServiceApplicationServiceTests
         public void Update(Subscription subscription) => throw new NotImplementedException();
     }
 
-    private sealed class FakeAppointmentRepository : IAppointmentRepository
+    private sealed class FakeAppointmentRepository(bool hasAppointmentsForService = false) : IAppointmentRepository
     {
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDate(int serviceId, DateOnly date, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
         public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default) => Task.FromResult(new List<Appointment>());
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
+        public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default) => Task.FromResult(hasAppointmentsForService);
         public Task<IReadOnlyCollection<Appointment>> SearchByServices(IReadOnlyCollection<int> serviceIds, DateOnly? from, DateOnly? to, AppointmentStatus? status, string? clientSearch, string? clientEmail, bool orderDescending, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByServices(IReadOnlyCollection<int> serviceIds, DateOnly from, DateOnly to, int? secretaryId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyCollection<AppointmentStatusCountResult>> GetStatusCountsByServices(IReadOnlyCollection<int> serviceIds, DateOnly from, DateOnly to, int? secretaryId = null, CancellationToken ct = default) => throw new NotImplementedException();

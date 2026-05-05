@@ -44,6 +44,13 @@ namespace BOOKLY.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
+        public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default)
+        {
+            return dbContext.Appointments
+                .AsNoTracking()
+                .AnyAsync(a => a.ServiceId == serviceId, ct);
+        }
+
         public async Task<IReadOnlyCollection<Appointment>> SearchByServices(
             IReadOnlyCollection<int> serviceIds,
             DateOnly? from,

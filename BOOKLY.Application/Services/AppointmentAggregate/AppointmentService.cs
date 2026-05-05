@@ -38,7 +38,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AppointmentService> _logger;
         private readonly IDateTimeProvider _dateTimeProvider;
-        private readonly IServiceAuthorizationService _serviceAuthorizationService;
 
         public AppointmentService(
             IAppointmentRepository repository,
@@ -53,7 +52,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IMapper mapper,
             IUnitOfWork unitOfWork,
             IDateTimeProvider dateTimeProvider,
-            IServiceAuthorizationService serviceAuthorizationService,
             ILogger<AppointmentService> logger)
         {
             _repository = repository;
@@ -69,7 +67,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _unitOfWork = unitOfWork;
             _logger = logger;
             _dateTimeProvider = dateTimeProvider;
-            _serviceAuthorizationService = serviceAuthorizationService;
         }
 
         public async Task<Result<AppointmentDto>> GetById(int id, CancellationToken ct = default)
@@ -465,45 +462,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                         appointment.Duration.Value),
                     ct),
                 "notificación de turno al owner",
-                owner.Email.Value);
-        }
-
-        private async Task NotifyAppointmentCancelled(Service service, Appointment appointment, CancellationToken ct)
-        {
-            var owner = await _userRepository.GetOne(service.OwnerId, ct);
-            var businessName = owner is null
-                ? "BOOKLY"
-                : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
-
-            await TrySendEmail(
-                () => _emailService.SendAppointmentCancelledToClient(
-                    new AppointmentCancelledClientEmailModel(
-                        appointment.Client.Email.Value,
-                        appointment.Client.ClientName,
-                        service.Name,
-                        businessName,
-                        appointment.StartDateTime,
-                        appointment.CancelReason),
-                    ct),
-                "cancelación de turno al cliente",
-                appointment.Client.Email.Value);
-
-            if (owner is null)
-                return;
-
-            await TrySendEmail(
-                () => _emailService.SendAppointmentCancelledToOwner(
-                    new AppointmentCancelledOwnerEmailModel(
-                        owner.Email.Value,
-                        owner.PersonName.FirstName,
-                        appointment.Client.ClientName,
-                        appointment.Client.Email.Value,
-                        appointment.Client.Phone,
-                        service.Name,
-                        appointment.StartDateTime,
-                        appointment.CancelReason),
-                    ct),
-                "cancelación de turno al owner",
                 owner.Email.Value);
         }
 

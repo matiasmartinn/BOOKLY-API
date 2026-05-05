@@ -14,6 +14,7 @@ namespace BOOKLY.Domain.Interfaces
             DateTime now,
             CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default);
+        Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> SearchByServices(
             IReadOnlyCollection<int> serviceIds,
             DateOnly? from,

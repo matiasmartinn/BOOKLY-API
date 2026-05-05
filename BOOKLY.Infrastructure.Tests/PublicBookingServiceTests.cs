@@ -246,6 +246,7 @@ public sealed class PublicBookingServiceTests
             => Task.FromResult(new List<Appointment>());
 
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyCollection<Appointment>> SearchByServices(IReadOnlyCollection<int> serviceIds, DateOnly? from, DateOnly? to, AppointmentStatus? status, string? clientSearch, string? clientEmail, bool orderDescending, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> CountByServices(IReadOnlyCollection<int> serviceIds, DateOnly from, DateOnly to, int? secretaryId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyCollection<AppointmentStatusCountResult>> GetStatusCountsByServices(IReadOnlyCollection<int> serviceIds, DateOnly from, DateOnly to, int? secretaryId = null, CancellationToken ct = default) => throw new NotImplementedException();

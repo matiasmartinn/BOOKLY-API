@@ -5,8 +5,8 @@ namespace BOOKLY.Application.Interfaces
 {
     public interface IAuthService
     {
-        Task<Result<LoginResponse>> Login(LoginRequest request, CancellationToken ct = default);
-        Task<Result<LoginResponse>> Refresh(RefreshRequest request, CancellationToken ct = default);
+        Task<Result<AuthResult>> Login(LoginRequest request, CancellationToken ct = default);
+        Task<Result<AuthResult>> Refresh(string refreshToken, CancellationToken ct = default);
         Task<Result> Logout(string refreshToken, CancellationToken ct = default);
     }
 }

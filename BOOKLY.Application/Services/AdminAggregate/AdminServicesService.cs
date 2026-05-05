@@ -11,6 +11,7 @@ namespace BOOKLY.Application.Services.AdminAggregate
     public sealed class AdminServicesService : IAdminServicesService
     {
         private readonly IAdminRepository _adminRepository;
+        private readonly IServiceApplicationService _serviceApplicationService;
         private readonly IServiceRepository _serviceRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDateTimeProvider _dateTimeProvider;
@@ -18,12 +19,14 @@ namespace BOOKLY.Application.Services.AdminAggregate
 
         public AdminServicesService(
             IAdminRepository adminRepository,
+            IServiceApplicationService serviceApplicationService,
             IServiceRepository serviceRepository,
             IUnitOfWork unitOfWork,
             IDateTimeProvider dateTimeProvider,
             IMapper mapper)
         {
             _adminRepository = adminRepository;
+            _serviceApplicationService = serviceApplicationService;
             _serviceRepository = serviceRepository;
             _unitOfWork = unitOfWork;
             _dateTimeProvider = dateTimeProvider;
@@ -96,17 +99,7 @@ namespace BOOKLY.Application.Services.AdminAggregate
                 return Result.Failure(Error.Validation("Id invalido."));
             }
 
-            var service = await _serviceRepository.GetOne(id, ct);
-            if (service == null)
-            {
-                return Result.Failure(Error.NotFound("Servicio"));
-            }
-
-            service.Activate();
-            _serviceRepository.Update(service);
-            await _unitOfWork.SaveChanges(ct);
-
-            return Result.Success();
+            return await _serviceApplicationService.Activate(id, ct);
         }
 
         public async Task<Result> DisableService(int id, CancellationToken ct = default)

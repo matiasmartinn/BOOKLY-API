@@ -35,7 +35,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.ViewAppointments, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.ViewAppointments, ct);
             if (access.IsFailure)
                 return HandleResult(Result<AppointmentDto>.Failure(access.Error));
 
@@ -127,7 +127,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetHistory(int id, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.ViewAppointments, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.ViewAppointments, ct);
             if (access.IsFailure)
                 return HandleResult(Result<IReadOnlyCollection<AppointmentStatusHistoryDto>>.Failure(access.Error));
 
@@ -159,7 +159,7 @@ namespace BOOKLY.Api.Controllers
             dto = dto with { UserId = currentUserId.Data };
             var result = await _appointmentService.CreateAppointment(dto, ct);
 
-            return HandleCreated(result, nameof(GetById), new { id = result.Data!.Id });
+            return HandleCreated(result, nameof(GetById), new { id = result.Data?.Id });
         }
 
         /// <summary>
@@ -171,7 +171,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateAppointmentDto dto, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.EditAppointments, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.EditAppointments, ct);
             if (access.IsFailure)
                 return HandleResult(Result<AppointmentDto>.Failure(access.Error));
 
@@ -188,7 +188,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Reschedule(int id, [FromBody] RescheduleAppointmentDto dto, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.RescheduleAppointments, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.RescheduleAppointments, ct);
             if (access.IsFailure)
                 return HandleResult(Result<AppointmentDto>.Failure(access.Error));
 
@@ -208,7 +208,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Cancel(int id, [FromBody] CancelAppointmentDto dto, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.CancelAppointments, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.CancelAppointments, ct);
             if (access.IsFailure)
                 return HandleResult(Result.Failure(access.Error));
 
@@ -229,7 +229,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> MarkAsAttended(int id, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.MarkAttendance, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.MarkAttendance, ct);
             if (access.IsFailure)
                 return HandleResult(Result.Failure(access.Error));
 
@@ -249,7 +249,7 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> MarkAsNoShow(int id, CancellationToken ct)
         {
-            var access = await EnsureAppointmentPermission(id, SecretaryPermission.MarkAttendance, ct);
+            var access = await GetAppointmentWithPermission(id, SecretaryPermission.MarkAttendance, ct);
             if (access.IsFailure)
                 return HandleResult(Result.Failure(access.Error));
 
@@ -281,7 +281,7 @@ namespace BOOKLY.Api.Controllers
             return Result.Failure(Error.Validation("Debes indicar un ownerId o un serviceId."));
         }
 
-        private async Task<Result<AppointmentDto>> EnsureAppointmentPermission(
+        private async Task<Result<AppointmentDto>> GetAppointmentWithPermission(
             int appointmentId,
             SecretaryPermission permission,
             CancellationToken ct)

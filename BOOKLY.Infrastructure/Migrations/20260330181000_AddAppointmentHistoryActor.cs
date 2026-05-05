@@ -1,3 +1,5 @@
+using BOOKLY.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -5,6 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BOOKLY.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(BooklyDbContext))]
+    [Migration("20260330181000_AddAppointmentHistoryActor")]
     public partial class AddAppointmentHistoryActor : Migration
     {
         /// <inheritdoc />

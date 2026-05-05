@@ -9,10 +9,16 @@ namespace BOOKLY.Api.Controllers
 {
     public abstract class BaseController : ControllerBase
     {
-        protected IActionResult HandleResult<T>(Result<T> result)
+        protected IActionResult HandleResult<T>(
+            Result<T> result,
+            int successStatusCode = StatusCodes.Status200OK)
         {
-            if (result.IsSuccess) return Ok(result.Data);
-            return MapError(result.Error!);
+            if (result.IsFailure)
+                return MapError(result.Error!);
+
+            return successStatusCode == StatusCodes.Status200OK
+                ? Ok(result.Data)
+                : StatusCode(successStatusCode, result.Data);
         }
 
         protected IActionResult HandleResult(Result result)
@@ -103,42 +109,68 @@ namespace BOOKLY.Api.Controllers
             return Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario."));
         }
 
-        private IActionResult MapError(Error error) => error.Type switch
+        private IActionResult MapError(Error error)
         {
-            ErrorType.NotFound => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Recurso no encontrado"),
+            var instance = HttpContext.Request.Path.Value;
 
-            ErrorType.Validation => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Error de validación"),
+            return error.Type switch
+            {
+                ErrorType.NotFound => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5",
+                    title: "Recurso no encontrado",
+                    statusCode: StatusCodes.Status404NotFound,
+                    detail: error.Message,
+                    instance: instance),
 
-            ErrorType.Domain => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Regla de negocio violada"),
+                ErrorType.Validation => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.1",
+                    title: "Error de validación",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    detail: error.Message,
+                    instance: instance),
 
-            ErrorType.Conflict => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Conflicto"),
+                ErrorType.Domain => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.1",
+                    title: "Regla de negocio violada",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    detail: error.Message,
+                    instance: instance),
 
-            ErrorType.Unauthorized => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status401Unauthorized,
-                title: "No autorizado"),
+                ErrorType.Conflict => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10",
+                    title: "Conflicto",
+                    statusCode: StatusCodes.Status409Conflict,
+                    detail: error.Message,
+                    instance: instance),
 
-            ErrorType.Forbidden => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Acceso denegado"),
+                ErrorType.Unauthorized => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.2",
+                    title: "No autorizado",
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    detail: error.Message,
+                    instance: instance),
 
-            _ => Problem(
-                detail: error.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error inesperado"),
-        };
+                ErrorType.Forbidden => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.4",
+                    title: "Acceso denegado",
+                    statusCode: StatusCodes.Status403Forbidden,
+                    detail: error.Message,
+                    instance: instance),
+
+                ErrorType.Unexpected => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1",
+                    title: "Error inesperado",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    detail: "Ocurrió un error inesperado.",
+                    instance: instance),
+
+                _ => Problem(
+                    type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1",
+                    title: "Error inesperado",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    detail: "Ocurrió un error inesperado.",
+                    instance: instance),
+            };
+        }
     }
 }

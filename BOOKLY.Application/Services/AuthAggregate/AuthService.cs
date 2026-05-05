@@ -33,11 +33,11 @@ namespace BOOKLY.Application.Services.AuthAggregate
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<Result<LoginResponse>> Login(LoginRequest request, CancellationToken ct = default)
+        public async Task<Result<AuthResult>> Login(LoginRequest request, CancellationToken ct = default)
         {
             var user = await _userRepository.GetByEmail(request.Email, ct);
             if (user is null || !user.VerifyPassword(request.Password, _passwordHasher))
-                return Result<LoginResponse>.Failure(Error.Unauthorized("Credenciales inválidas."));
+                return Result<AuthResult>.Failure(Error.Unauthorized("Credenciales invalidas."));
 
             try
             {
@@ -45,7 +45,7 @@ namespace BOOKLY.Application.Services.AuthAggregate
             }
             catch (DomainException ex)
             {
-                return Result<LoginResponse>.Failure(Error.Unauthorized(ex.Message));
+                return Result<AuthResult>.Failure(Error.Unauthorized(ex.Message));
             }
 
             var now = _dateTimeProvider.UtcNow();
@@ -57,22 +57,25 @@ namespace BOOKLY.Application.Services.AuthAggregate
             await _userRepository.AddRefreshToken(refreshToken, ct);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<LoginResponse>.Success(
-                CreateLoginResponse(user, accessToken, rawRefreshToken));
+            return Result<AuthResult>.Success(
+                CreateAuthResult(user, accessToken, rawRefreshToken));
         }
 
-        public async Task<Result<LoginResponse>> Refresh(RefreshRequest request, CancellationToken ct = default)
+        public async Task<Result<AuthResult>> Refresh(string refreshToken, CancellationToken ct = default)
         {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+                return Result<AuthResult>.Failure(Error.Unauthorized("El refresh token es requerido."));
+
             var now = _dateTimeProvider.UtcNow();
-            var refreshTokenHash = _tokenHashingService.HashToken(request.RefreshToken);
-            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, request.RefreshToken, ct);
+            var refreshTokenHash = _tokenHashingService.HashToken(refreshToken);
+            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, refreshToken, ct);
 
             if (storedRefreshToken is null || !storedRefreshToken.IsValid(now))
-                return Result<LoginResponse>.Failure(Error.Unauthorized("Refresh token inválido o vencido."));
+                return Result<AuthResult>.Failure(Error.Unauthorized("Refresh token invalido o vencido."));
 
             var user = await _userRepository.GetById(storedRefreshToken.UserId, ct);
             if (user is null)
-                return Result<LoginResponse>.Failure(Error.Unauthorized("Refresh token inválido."));
+                return Result<AuthResult>.Failure(Error.Unauthorized("Refresh token invalido."));
 
             try
             {
@@ -82,7 +85,7 @@ namespace BOOKLY.Application.Services.AuthAggregate
             {
                 storedRefreshToken.Revoke();
                 await _unitOfWork.SaveChanges(ct);
-                return Result<LoginResponse>.Failure(Error.Unauthorized(ex.Message));
+                return Result<AuthResult>.Failure(Error.Unauthorized(ex.Message));
             }
 
             var rawRefreshToken = RefreshToken.GenerateToken();
@@ -93,8 +96,8 @@ namespace BOOKLY.Application.Services.AuthAggregate
             await _userRepository.AddRefreshToken(newRefreshToken, ct);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<LoginResponse>.Success(
-                CreateLoginResponse(user, accessToken, rawRefreshToken));
+            return Result<AuthResult>.Success(
+                CreateAuthResult(user, accessToken, rawRefreshToken));
         }
 
         public async Task<Result> Logout(string refreshToken, CancellationToken ct = default)
@@ -106,7 +109,7 @@ namespace BOOKLY.Application.Services.AuthAggregate
             var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, refreshToken, ct);
             if (storedRefreshToken is null || !storedRefreshToken.IsValid(_dateTimeProvider.UtcNow()))
             {
-                return Result.Failure(Error.Unauthorized("Refresh token inválido o vencido."));
+                return Result.Failure(Error.Unauthorized("Refresh token invalido o vencido."));
             }
 
             storedRefreshToken.Revoke();
@@ -115,10 +118,14 @@ namespace BOOKLY.Application.Services.AuthAggregate
             return Result.Success();
         }
 
-        private static LoginResponse CreateLoginResponse(User user, string accessToken, string refreshToken)
+        private static AuthResult CreateAuthResult(User user, string accessToken, string refreshToken)
+            => new(
+                CreateLoginResponse(user, accessToken),
+                refreshToken);
+
+        private static LoginResponse CreateLoginResponse(User user, string accessToken)
             => new(
                 accessToken,
-                refreshToken,
                 user.Id,
                 user.Email.Value,
                 Roles.From(user.Role),

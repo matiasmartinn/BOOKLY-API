@@ -26,6 +26,11 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 {
     public class ServiceApplicationService : IServiceApplicationService
     {
+        private const string DeleteServiceWithAppointmentsMessage =
+            "No se puede eliminar un servicio con turnos asociados. Puedes desactivarlo para impedir nuevas reservas y conservar el historial.";
+        private const string ActiveServiceLimitReachedMessage =
+            "Alcanzaste el máximo de servicios activos permitidos por tu plan.";
+
         private readonly IServiceRepository _serviceRepository;
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IAvailabilityService _availabilityService;
@@ -109,15 +114,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 return Result<ServiceDto>.Failure(Error.NotFound("TipoServicio"));
 
             var subscription = await GetEffectiveSubscription(dto.OwnerId, ct);
-            var currentServices = await _serviceRepository.CountActiveByOwnerId(dto.OwnerId, ct);
-
-            var subscriptionValidation = ValidateCanCreateService(subscription, currentServices);
-            if (subscriptionValidation.IsFailure)
-                return Result<ServiceDto>.Failure(subscriptionValidation.Error);
-
-            var extraFieldsValidation = EnsureExtraFieldsAllowed(subscription, serviceType);
-            if (extraFieldsValidation.IsFailure)
-                return Result<ServiceDto>.Failure(extraFieldsValidation.Error);
+            var activeServiceLimitValidation = await ValidateCanAddActiveService(dto.OwnerId, subscription, ct);
+            if (activeServiceLimitValidation.IsFailure)
+                return Result<ServiceDto>.Failure(activeServiceLimitValidation.Error);
 
             var slug = await GenerateUniqueSlugAsync(dto.Name, null, ct);
             Service service;
@@ -214,9 +213,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                     service.ChangeCapacity(dto.Capacity.Value);
                 }
 
-                if (dto.Price != null)
+                if (dto.PriceWasProvided)
                 {
-                    service.ChangePrice(dto.Price.Value);
+                    service.ChangePrice(dto.Price);
                 }
             }
             catch (DomainException ex)
@@ -236,9 +235,19 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
-            service.Deactivate();
-            _serviceRepository.Update(service);
-            await _unitOfWork.SaveChanges(ct);
+            if (await _appointmentRepository.ExistsByServiceId(id, ct))
+                return Result.Failure(Error.Conflict(DeleteServiceWithAppointmentsMessage));
+
+            try
+            {
+                _serviceRepository.Remove(service);
+                await _unitOfWork.SaveChanges(ct);
+            }
+            catch (ConflictException)
+            {
+                return Result.Failure(Error.Conflict(DeleteServiceWithAppointmentsMessage));
+            }
+
             return Result.Success();
         }
 
@@ -614,6 +623,13 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (service == null)
                 return Result.Failure(Error.NotFound("Servicio"));
 
+            if (!service.IsActive)
+            {
+                var activeServiceLimitValidation = await ValidateCanAddActiveService(service.OwnerId, ct);
+                if (activeServiceLimitValidation.IsFailure)
+                    return activeServiceLimitValidation;
+            }
+
             service.Activate();
             _serviceRepository.Update(service);
             await _unitOfWork.SaveChanges(ct);
@@ -799,6 +815,21 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             };
         }
 
+        private async Task<Result> ValidateCanAddActiveService(int ownerId, CancellationToken ct)
+        {
+            var subscription = await GetEffectiveSubscription(ownerId, ct);
+            return await ValidateCanAddActiveService(ownerId, subscription, ct);
+        }
+
+        private async Task<Result> ValidateCanAddActiveService(
+            int ownerId,
+            Subscription subscription,
+            CancellationToken ct)
+        {
+            var currentActiveServices = await _serviceRepository.CountActiveByOwnerId(ownerId, ct);
+            return ValidateCanCreateService(subscription, currentActiveServices);
+        }
+
         private static Result ValidateCanCreateService(Subscription subscription, int currentServices)
         {
             try
@@ -806,9 +837,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 subscription.EnsureCanCreateService(currentServices);
                 return Result.Success();
             }
-            catch (DomainException ex)
+            catch (DomainException)
             {
-                return Result.Failure(Error.Validation(ex.Message));
+                return Result.Failure(Error.Conflict(ActiveServiceLimitReachedMessage));
             }
         }
 

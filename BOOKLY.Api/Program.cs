@@ -1,4 +1,5 @@
 using BOOKLY.Api.Middleware;
+using BOOKLY.Application.Common;
 using BOOKLY.Application.DependencyInjection;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
@@ -15,17 +16,19 @@ builder.Configuration
         reloadOnChange: true);
 
 const string FrontendPolicy = "FrontendPolicy";
+var allowedOrigins = GetAllowedOrigins(builder.Configuration);
+
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendPolicy, policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://localhost:3000")
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -62,3 +65,22 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static string[] GetAllowedOrigins(IConfiguration configuration)
+{
+    var configuredOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? Array.Empty<string>();
+    var frontendBaseUrl = configuration["Frontend:BaseUrl"];
+
+    var origins = configuredOrigins
+        .Concat(string.IsNullOrWhiteSpace(frontendBaseUrl)
+            ? Array.Empty<string>()
+            : new[] { frontendBaseUrl })
+        .Where(origin => !string.IsNullOrWhiteSpace(origin) && origin != "*")
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    return origins.Length > 0
+        ? origins
+        : new[] { "http://localhost:5173" };
+}
