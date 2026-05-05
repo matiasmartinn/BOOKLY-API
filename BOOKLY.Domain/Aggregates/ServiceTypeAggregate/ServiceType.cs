@@ -2,21 +2,32 @@
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects;
 using BOOKLY.Domain.Exceptions;
+using System.Text.RegularExpressions;
 
 namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
 {
     public sealed class ServiceType
     {
+        public const string DefaultColorHex = "#4E63F5";
+        private const int MaxIconKeyLength = 50;
+        private static readonly Regex ColorHexRegex = new("^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled);
+
         public int Id { get; private set; }
         public string Name { get; private set; } = null!;
         public string? Description { get; private set; }
+        public string ColorHex { get; private set; } = DefaultColorHex;
+        public string? IconKey { get; private set; }
         public bool IsActive { get; private set; }
         private readonly List<ServiceTypeFieldDefinition> _fieldDefinitions = new();
         public IReadOnlyCollection<ServiceTypeFieldDefinition> FieldDefinitions => _fieldDefinitions.AsReadOnly();
 
         private ServiceType() { }
 
-        public static ServiceType Create(string name, string? description = null)
+        public static ServiceType Create(
+            string name,
+            string? description = null,
+            string? colorHex = null,
+            string? iconKey = null)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new DomainException("El nombre del tipo de servicio es requerido");
@@ -25,6 +36,8 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
             {
                 Name = name.Trim(),
                 Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                ColorHex = NormalizeColorHex(colorHex),
+                IconKey = NormalizeIconKey(iconKey),
                 IsActive = true
             };
         }
@@ -42,6 +55,12 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
         public void ChangeDescription(string? desc)
         {
             Description = desc?.Trim();
+        }
+
+        public void ChangeVisualIdentity(string? colorHex, string? iconKey)
+        {
+            ColorHex = NormalizeColorHex(colorHex);
+            IconKey = NormalizeIconKey(iconKey);
         }
 
         public void Deactivate() => IsActive = false;
@@ -138,6 +157,30 @@ namespace BOOKLY.Domain.Aggregates.ServiceTypeAggregate
             if (def is null)
                 throw new DomainException("El campo no existe.");
             return def;
+        }
+
+        private static string NormalizeColorHex(string? colorHex)
+        {
+            var normalized = string.IsNullOrWhiteSpace(colorHex)
+                ? DefaultColorHex
+                : colorHex.Trim();
+
+            if (!ColorHexRegex.IsMatch(normalized))
+                throw new DomainException("El color del tipo de servicio debe tener formato HEX #RRGGBB.");
+
+            return normalized.ToUpperInvariant();
+        }
+
+        private static string? NormalizeIconKey(string? iconKey)
+        {
+            if (string.IsNullOrWhiteSpace(iconKey))
+                return null;
+
+            var normalized = iconKey.Trim().ToLowerInvariant();
+            if (normalized.Length > MaxIconKeyLength)
+                throw new DomainException($"La key del icono no puede superar {MaxIconKeyLength} caracteres.");
+
+            return normalized;
         }
     }
 }

@@ -798,6 +798,8 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             return _mapper.Map<ServiceDto>(service) with
             {
                 AllowsExtraFields = subscription.Plan.AllowsExtraFields(),
+                ServiceTypeColorHex = serviceType?.ColorHex,
+                ServiceTypeIconKey = serviceType?.IconKey,
                 FieldDefinitions = _mapper.Map<List<ServiceTypeFieldDefinitionDto>>(orderedFields)
             };
         }

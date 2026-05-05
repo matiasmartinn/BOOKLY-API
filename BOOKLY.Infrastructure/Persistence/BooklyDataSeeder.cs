@@ -13,33 +13,20 @@ namespace BOOKLY.Infrastructure.Persistence
         private const string InitialAdminEmail = "admin@bookly.local";
         private const string InitialAdminPassword = "Admin123!";
 
-        private static readonly string[] InitialServiceTypes =
+        private static readonly SeedServiceType[] InitialServiceTypes =
         [
-            "Peluquería",
-            "Barbería",
-            "Psicología",
-            "Kinesiología",
-            "Nutrición",
-            "Odontología",
-            "Dermatología",
-            "Masajes",
-            "Manicura y uñas",
-            "Depilación",
-            "Estética facial",
-            "Estética corporal",
-            "Entrenamiento personal",
-            "Clases particulares",
-            "Consultoría profesional",
-            "Asesoría legal",
-            "Asesoría contable",
-            "Reparación técnica",
-            "Veterinaria",
-            "Fotografía",
-            "Maquillaje profesional",
-            "Tatuajes y piercing",
-            "Limpieza del hogar",
-            "Coaching",
-            "Terapias alternativas"
+            new("Peluquería", "#E11D48", "scissors"),
+            new("Barbería", "#0F766E", "scissors"),
+            new("Psicología", "#7C3AED", "heart-pulse"),
+            new("Kinesiología", "#0284C7", "heart-pulse"),
+            new("Nutrición", "#16A34A", "heart-pulse"),
+            new("Odontología", "#0891B2", "heart-pulse"),
+            new("Masajes", "#D97706", "sparkles"),
+            new("Manicura y uñas", "#DB2777", "sparkles"),
+            new("Entrenamiento personal", "#EA580C", "dumbbell"),
+            new("Clases particulares", "#2563EB", "book-open"),
+            new("Asesoría profesional", "#475569", "briefcase"),
+            new("Terapias alternativas", "#9333EA", "sparkles")
         ];
 
         public static async Task SeedBooklyDataAsync(this IServiceProvider services, CancellationToken ct = default)
@@ -55,22 +42,34 @@ namespace BOOKLY.Infrastructure.Persistence
 
         private static async Task SeedServiceTypes(BooklyDbContext dbContext, CancellationToken ct)
         {
-            var existingNames = await dbContext.ServiceTypes
-                .AsNoTracking()
-                .Select(serviceType => serviceType.Name)
+            var serviceTypes = await dbContext.ServiceTypes
                 .ToListAsync(ct);
 
-            var existingNameSet = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var missingServiceTypes = InitialServiceTypes
-                .Where(name => !existingNameSet.Contains(name))
-                .Select(name => ServiceType.Create(name))
-                .ToList();
+            var serviceTypesByName = serviceTypes
+                .ToDictionary(serviceType => serviceType.Name, StringComparer.OrdinalIgnoreCase);
 
-            if (missingServiceTypes.Count == 0)
-                return;
+            var changed = false;
+            foreach (var seedItem in InitialServiceTypes)
+            {
+                if (serviceTypesByName.TryGetValue(seedItem.Name, out var serviceType))
+                {
+                    if (serviceType.ColorHex != seedItem.ColorHex || serviceType.IconKey != seedItem.IconKey)
+                    {
+                        serviceType.ChangeVisualIdentity(seedItem.ColorHex, seedItem.IconKey);
+                        changed = true;
+                    }
 
-            await dbContext.ServiceTypes.AddRangeAsync(missingServiceTypes, ct);
-            await dbContext.SaveChangesAsync(ct);
+                    continue;
+                }
+
+                await dbContext.ServiceTypes.AddAsync(
+                    ServiceType.Create(seedItem.Name, colorHex: seedItem.ColorHex, iconKey: seedItem.IconKey),
+                    ct);
+                changed = true;
+            }
+
+            if (changed)
+                await dbContext.SaveChangesAsync(ct);
         }
 
         private static async Task SeedInitialAdmin(
@@ -95,5 +94,7 @@ namespace BOOKLY.Infrastructure.Persistence
             await dbContext.Users.AddAsync(admin, ct);
             await dbContext.SaveChangesAsync(ct);
         }
+
+        private sealed record SeedServiceType(string Name, string ColorHex, string IconKey);
     }
 }

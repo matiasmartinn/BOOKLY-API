@@ -28,6 +28,8 @@ namespace BOOKLY.Domain.Queries
     public sealed record AdminServiceTypeUsageReadModel(
         int ServiceTypeId,
         string ServiceTypeName,
+        string ColorHex,
+        string? IconKey,
         int Total);
 
     public sealed record AdminOwnerListQuery(
@@ -81,5 +83,7 @@ namespace BOOKLY.Domain.Queries
         PlanName OwnerEffectivePlanName,
         int ServiceTypeId,
         string ServiceTypeName,
+        string ServiceTypeColorHex,
+        string? ServiceTypeIconKey,
         decimal? Price);
 }

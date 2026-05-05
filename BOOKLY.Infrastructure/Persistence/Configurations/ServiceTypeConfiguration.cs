@@ -27,6 +27,16 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                    .HasColumnName("description")
                    .HasMaxLength(500);
 
+            builder.Property(x => x.ColorHex)
+                   .HasColumnName("color_hex")
+                   .HasMaxLength(7)
+                   .IsRequired()
+                   .HasDefaultValue(ServiceType.DefaultColorHex);
+
+            builder.Property(x => x.IconKey)
+                   .HasColumnName("icon_key")
+                   .HasMaxLength(50);
+
             builder.Property(x => x.IsActive)
                    .HasColumnName("is_active")
                    .IsRequired()
@@ -43,9 +53,9 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             // Seed inicial (opcional)
             builder.HasData(
-                new { Id = 1, Name = "Consulta", Description = "Consulta médica", IsActive = true },
-                new { Id = 2, Name = "Tratamiento", Description = "Sesión de tratamiento", IsActive = true },
-                new { Id = 3, Name = "Seguimiento", Description = "Consulta de seguimiento", IsActive = true }
+                new { Id = 1, Name = "Consulta", Description = "Consulta médica", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true },
+                new { Id = 2, Name = "Tratamiento", Description = "Sesión de tratamiento", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true },
+                new { Id = 3, Name = "Seguimiento", Description = "Consulta de seguimiento", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true }
             );
         }
     }

@@ -13,6 +13,8 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         public string? PlaceName { get; init; }
         public string? Address { get; init; }
         public int ServiceTypeId { get; init; }
+        public string? ServiceTypeColorHex { get; init; }
+        public string? ServiceTypeIconKey { get; init; }
         public DateTime CreatedAt { get; init; }
         public int DurationMinutes { get; init; }
         public int Capacity { get; init; }

@@ -62,7 +62,9 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
             {
                 serviceType = ServiceType.Create(
                     dto.Name,
-                    dto.Description
+                    dto.Description,
+                    dto.ColorHex,
+                    dto.IconKey
                 );
             }
             catch (DomainException ex)
@@ -89,6 +91,11 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
                 if (dto.Description != null)
                     serviceType.ChangeDescription(dto.Description);
+
+                if (dto.ColorHex != null || dto.IconKey != null)
+                    serviceType.ChangeVisualIdentity(
+                        dto.ColorHex ?? serviceType.ColorHex,
+                        dto.IconKey ?? serviceType.IconKey);
             }
             catch (DomainException ex)
             {

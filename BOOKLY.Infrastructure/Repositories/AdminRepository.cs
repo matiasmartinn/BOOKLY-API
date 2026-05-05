@@ -192,13 +192,17 @@ namespace BOOKLY.Infrastructure.Repositories
                 group service by new
                 {
                     service.ServiceTypeId,
-                    serviceType.Name
+                    serviceType.Name,
+                    serviceType.ColorHex,
+                    serviceType.IconKey
                 }
                 into grouped
                 orderby grouped.Count() descending, grouped.Key.Name
                 select new AdminServiceTypeUsageReadModel(
                     grouped.Key.ServiceTypeId,
                     grouped.Key.Name,
+                    grouped.Key.ColorHex,
+                    grouped.Key.IconKey,
                     grouped.Count()))
                 .ToListAsync(ct);
         }
@@ -306,6 +310,8 @@ namespace BOOKLY.Infrastructure.Repositories
                         GetEffectivePlan(subscription, today),
                         service.ServiceTypeId,
                         service.ServiceTypeName,
+                        service.ServiceTypeColorHex,
+                        service.ServiceTypeIconKey,
                         service.Price);
                 })
                 .ToList();
@@ -404,6 +410,8 @@ namespace BOOKLY.Infrastructure.Repositories
                     CreatedAt = service.CreatedAt,
                     ServiceTypeId = service.ServiceTypeId,
                     ServiceTypeName = serviceType != null ? serviceType.Name : string.Empty,
+                    ServiceTypeColorHex = serviceType != null ? serviceType.ColorHex : string.Empty,
+                    ServiceTypeIconKey = serviceType != null ? serviceType.IconKey : null,
                     Price = service.Price,
                     OwnerId = owner.Id,
                     OwnerFirstName = owner.PersonName.FirstName,
@@ -558,6 +566,8 @@ namespace BOOKLY.Infrastructure.Repositories
             public bool OwnerEmailConfirmed { get; init; }
             public int ServiceTypeId { get; init; }
             public string ServiceTypeName { get; init; } = string.Empty;
+            public string ServiceTypeColorHex { get; init; } = string.Empty;
+            public string? ServiceTypeIconKey { get; init; }
             public decimal? Price { get; init; }
         }
     }

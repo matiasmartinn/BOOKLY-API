@@ -31,6 +31,8 @@ namespace BOOKLY.Application.Services.AdminAggregate.DTOs
     {
         public int ServiceTypeId { get; init; }
         public string ServiceTypeName { get; init; } = string.Empty;
+        public string ColorHex { get; init; } = string.Empty;
+        public string? IconKey { get; init; }
         public int Total { get; init; }
     }
 
@@ -109,6 +111,8 @@ namespace BOOKLY.Application.Services.AdminAggregate.DTOs
         public AdminPlanDto OwnerPlan { get; init; } = null!;
         public int ServiceTypeId { get; init; }
         public string ServiceTypeName { get; init; } = string.Empty;
+        public string ServiceTypeColorHex { get; init; } = string.Empty;
+        public string? ServiceTypeIconKey { get; init; }
         public decimal? Price { get; init; }
     }
 }
