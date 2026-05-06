@@ -173,7 +173,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.ConfirmEmail();
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {
@@ -263,7 +263,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.SetPassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {
@@ -588,7 +588,7 @@ namespace BOOKLY.Application.Services.UserAggregate
                 userId,
                 purpose,
                 _tokenHashingService.HashToken(rawToken),
-                _dateTimeProvider.NowArgentina(),
+                _dateTimeProvider.UtcNow(),
                 ttl);
 
             await _userTokenRepository.AddOne(token, ct);
@@ -614,7 +614,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return (Result.Failure(Error.NotFound("Usuario")), null, null);
 
-            if (token.IsExpired(_dateTimeProvider.NowArgentina()))
+            if (token.IsExpired(_dateTimeProvider.UtcNow()))
                 return (Result.Failure(Error.Validation($"El token de {tokenLabel} está vencido")), token, user);
 
             if (token.IsUsed && expectedPurpose != UserTokenPurpose.EmailConfirmation)
@@ -655,7 +655,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.AcceptInvitation(Password.FromHash(_passwordHasher.Hash(password)));
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {

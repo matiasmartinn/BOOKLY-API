@@ -3,17 +3,17 @@ using System;
 using BOOKLY.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
 namespace BOOKLY.Infrastructure.Migrations
 {
     [DbContext(typeof(BooklyDbContext))]
-    [Migration("20260405065146_AddServiceSecretaryPermissionStorage")]
-    partial class AddServiceSecretaryPermissionStorage
+    [Migration("20260506183635_InitialPostgres")]
+    partial class InitialPostgres
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,65 +21,65 @@ namespace BOOKLY.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.22")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.AppointmentAggregate.Appointment", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("appointment_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("AssignedSecretaryId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("assigned_secretary_id");
 
                     b.Property<string>("CancelReason")
                         .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnType("character varying(1000)")
                         .HasColumnName("cancel_reason");
 
                     b.Property<DateTime?>("CancelledOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("cancelled_on");
 
                     b.Property<string>("ClientNotes")
                         .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnType("character varying(1000)")
                         .HasColumnName("client_notes");
 
                     b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_on");
 
                     b.Property<DateTime>("EndDateTime")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("end_date_time");
 
                     b.Property<int>("ServiceId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_id");
 
                     b.Property<DateTime>("StartDateTime")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("start_date_time");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("status");
 
                     b.Property<int?>("UpdateBy")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("updated_by");
 
                     b.Property<DateTime?>("UpdateOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_on");
 
                     b.HasKey("Id");
@@ -100,23 +100,23 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("appointment_field_value_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int>("AppointmentId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("appointment_id");
 
                     b.Property<int>("FieldDefinitionId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("field_definition_id");
 
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnType("character varying(2000)")
                         .HasColumnName("value");
 
                     b.HasKey("Id");
@@ -134,33 +134,33 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("appointment_status_history_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int>("AppointmentId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("appointment_id");
 
                     b.Property<int>("NewStatus")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("new_status");
 
                     b.Property<DateTime>("OccurredOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("occurred_on");
 
                     b.Property<int?>("OldStatus")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("old_status");
 
                     b.Property<string>("Reason")
-                        .HasColumnType("nvarchar(max)")
+                        .HasColumnType("text")
                         .HasColumnName("reason");
 
                     b.Property<int?>("UserId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
@@ -176,17 +176,17 @@ namespace BOOKLY.Infrastructure.Migrations
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceSecretary", b =>
                 {
                     b.Property<int>("ServiceId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_id");
 
                     b.Property<int>("SecretaryId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("secretary_id");
 
                     b.Property<string>("PermissionsData")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
+                        .HasColumnType("text")
                         .HasDefaultValue("[]")
                         .HasColumnName("permissions");
 
@@ -205,49 +205,81 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
+                        .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsPublicBookingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_public_booking_enabled");
+
                     b.Property<int>("Mode")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("mode");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
                     b.Property<int>("OwnerId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("owner_id");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone_number");
 
                     b.Property<decimal?>("Price")
                         .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
+                        .HasColumnType("numeric(18,2)")
                         .HasColumnName("price");
 
+                    b.Property<string>("PublicBookingCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("public_booking_code");
+
+                    b.Property<DateTime?>("PublicBookingCodeUpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("public_booking_code_updated_at");
+
                     b.Property<int>("ServiceTypeId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_type_id");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_services_created_at");
+
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_services_owner_id");
+
+                    b.HasIndex("PublicBookingCode")
+                        .IsUnique()
+                        .HasDatabaseName("ux_services_public_booking_code");
 
                     b.HasIndex("ServiceTypeId")
                         .HasDatabaseName("ix_services_service_type_id");
@@ -259,44 +291,44 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("field_definition_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_on");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
+                        .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
                     b.Property<int>("FieldType")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("field_type");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsRequired")
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_required");
 
                     b.Property<int>("ServiceTypeId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_type_id");
 
                     b.Property<int>("SortOrder")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("sort_order");
 
                     b.Property<DateTime?>("UpdatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_on");
 
                     b.HasKey("Id");
@@ -311,41 +343,43 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("field_option_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_on");
 
                     b.Property<int>("FieldDefinitionId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("field_definition_id");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)")
+                        .HasColumnType("character varying(80)")
                         .HasColumnName("label");
 
                     b.Property<int>("SortOrder")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("sort_order");
 
                     b.Property<DateTime?>("UpdatedOn")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_on");
 
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(60)
-                        .HasColumnType("nvarchar(60)")
+                        .HasColumnType("character varying(60)")
                         .HasColumnName("value");
 
                     b.HasKey("Id");
@@ -364,26 +398,39 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("service_type_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColorHex")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasDefaultValue("#4E63F5")
+                        .HasColumnName("color_hex");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
+                        .HasColumnType("character varying(500)")
                         .HasColumnName("description");
+
+                    b.Property<string>("IconKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("icon_key");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
                     b.HasKey("Id");
@@ -393,54 +440,31 @@ namespace BOOKLY.Infrastructure.Migrations
                         .HasDatabaseName("ix_service_types_name");
 
                     b.ToTable("service_types", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Description = "Consulta médica",
-                            IsActive = true,
-                            Name = "Consulta"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Description = "Sesión de tratamiento",
-                            IsActive = true,
-                            Name = "Tratamiento"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Description = "Consulta de seguimiento",
-                            IsActive = true,
-                            Name = "Seguimiento"
-                        });
                 });
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.SubscriptionAggregate.Subscription", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("subscription_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_on");
 
                     b.Property<int>("OwnerId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("owner_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<DateTime?>("UpdatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_on");
 
                     b.HasKey("Id");
@@ -451,48 +475,98 @@ namespace BOOKLY.Infrastructure.Migrations
 
                     b.ToTable("subscriptions", null, t =>
                         {
-                            t.HasCheckConstraint("ck_subscriptions_free_end_date", "[plan_name] <> 1 OR [end_date] IS NULL");
+                            t.HasCheckConstraint("ck_subscriptions_free_end_date", "plan_name <> 1 OR end_date IS NULL");
 
-                            t.HasCheckConstraint("ck_subscriptions_period_dates", "[end_date] IS NULL OR [end_date] >= [start_date]");
+                            t.HasCheckConstraint("ck_subscriptions_period_dates", "end_date IS NULL OR end_date >= start_date");
                         });
+                });
+
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("refresh_token_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsRevoked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_revoked");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("token");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_refresh_tokens_expires_at");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ux_refresh_tokens_token");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_refresh_tokens_user_id");
+
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("user_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<bool>("EmailConfirmed")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("email_confirmed");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
                     b.Property<DateTime?>("LastLoginAt")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("last_login_at");
 
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
+                        .HasColumnType("character varying(20)")
                         .HasColumnName("role");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
 
                     b.HasKey("Id");
 
@@ -508,6 +582,9 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasIndex("Role")
                         .HasDatabaseName("ix_users_role");
 
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_users_status");
+
                     b.ToTable("users", (string)null);
                 });
 
@@ -515,37 +592,37 @@ namespace BOOKLY.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("user_token_id");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_on");
 
                     b.Property<DateTime>("ExpiresOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_on");
 
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("purpose");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)")
+                        .HasColumnType("character varying(64)")
                         .HasColumnName("token_hash");
 
                     b.Property<DateTime?>("UsedOn")
-                        .HasColumnType("datetime2")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("used_on");
 
                     b.Property<int>("UserId")
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
@@ -574,7 +651,7 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", null)
                         .WithMany()
                         .HasForeignKey("AssignedSecretaryId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BOOKLY.Domain.Aggregates.ServiceAggregate.Service", null)
                         .WithMany()
@@ -585,15 +662,15 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", null)
                         .WithMany()
                         .HasForeignKey("UpdateBy")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Duration", "Duration", b1 =>
                         {
                             b1.Property<int>("AppointmentId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<int>("Value")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("duration_minutes");
 
                             b1.HasKey("AppointmentId");
@@ -607,18 +684,18 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.AppointmentAggregate.ClientInfo", "Client", b1 =>
                         {
                             b1.Property<int>("AppointmentId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("ClientName")
                                 .IsRequired()
                                 .HasMaxLength(200)
-                                .HasColumnType("nvarchar(200)")
+                                .HasColumnType("character varying(200)")
                                 .HasColumnName("client_name");
 
                             b1.Property<string>("Phone")
                                 .IsRequired()
                                 .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
+                                .HasColumnType("character varying(50)")
                                 .HasColumnName("client_phone");
 
                             b1.HasKey("AppointmentId");
@@ -631,12 +708,12 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.SharedKernel.Email", "Email", b2 =>
                                 {
                                     b2.Property<int>("ClientInfoAppointmentId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<string>("Value")
                                         .IsRequired()
                                         .HasMaxLength(255)
-                                        .HasColumnType("nvarchar(255)")
+                                        .HasColumnType("character varying(255)")
                                         .HasColumnName("client_email");
 
                                     b2.HasKey("ClientInfoAppointmentId");
@@ -721,10 +798,10 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Capacity", "Capacity", b1 =>
                         {
                             b1.Property<int>("ServiceId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<int>("Value")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("capacity");
 
                             b1.HasKey("ServiceId");
@@ -738,10 +815,10 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Duration", "DurationMinutes", b1 =>
                         {
                             b1.Property<int>("ServiceId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<int>("Value")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("duration_minutes");
 
                             b1.HasKey("ServiceId");
@@ -755,21 +832,16 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Location", "Location", b1 =>
                         {
                             b1.Property<int>("ServiceId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Address")
                                 .HasMaxLength(250)
-                                .HasColumnType("nvarchar(250)")
+                                .HasColumnType("character varying(250)")
                                 .HasColumnName("address");
-
-                            b1.Property<string>("GoogleMapsUrl")
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("google_maps_url");
 
                             b1.Property<string>("PlaceName")
                                 .HasMaxLength(150)
-                                .HasColumnType("nvarchar(150)")
+                                .HasColumnType("character varying(150)")
                                 .HasColumnName("place_name");
 
                             b1.HasKey("ServiceId");
@@ -783,12 +855,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Slug", "Slug", b1 =>
                         {
                             b1.Property<int>("ServiceId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(150)
-                                .HasColumnType("nvarchar(150)")
+                                .HasColumnType("character varying(150)")
                                 .HasColumnName("slug");
 
                             b1.HasKey("ServiceId");
@@ -807,13 +879,13 @@ namespace BOOKLY.Infrastructure.Migrations
                         {
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("service_schedule_id");
 
-                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("Id"));
 
                             b1.Property<int>("service_id")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.HasKey("Id");
 
@@ -828,10 +900,10 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Capacity", "Capacity", b2 =>
                                 {
                                     b2.Property<int>("ServiceScheduleId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<int>("Value")
-                                        .HasColumnType("int")
+                                        .HasColumnType("integer")
                                         .HasColumnName("capacity");
 
                                     b2.HasKey("ServiceScheduleId");
@@ -845,7 +917,7 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.TimeRange", "Range", b2 =>
                                 {
                                     b2.Property<int>("ServiceScheduleId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<TimeOnly>("End")
                                         .HasColumnType("time")
@@ -866,10 +938,10 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Day", "Day", b2 =>
                                 {
                                     b2.Property<int>("ServiceScheduleId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<int>("Value")
-                                        .HasColumnType("int")
+                                        .HasColumnType("integer")
                                         .HasColumnName("day");
 
                                     b2.HasKey("ServiceScheduleId");
@@ -894,18 +966,18 @@ namespace BOOKLY.Infrastructure.Migrations
                         {
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("service_unavailability_id");
 
-                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("Id"));
 
                             b1.Property<string>("Reason")
                                 .HasMaxLength(250)
-                                .HasColumnType("nvarchar(250)")
+                                .HasColumnType("character varying(250)")
                                 .HasColumnName("reason");
 
                             b1.Property<int>("service_id")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.HasKey("Id");
 
@@ -920,7 +992,7 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.TimeRange", "TimeRange", b2 =>
                                 {
                                     b2.Property<int>("ServiceUnavailabilityId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<TimeOnly>("End")
                                         .HasColumnType("time")
@@ -941,7 +1013,7 @@ namespace BOOKLY.Infrastructure.Migrations
                             b1.OwnsOne("BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.DateRange", "DateRange", b2 =>
                                 {
                                     b2.Property<int>("ServiceUnavailabilityId")
-                                        .HasColumnType("int");
+                                        .HasColumnType("integer");
 
                                     b2.Property<DateOnly>("End")
                                         .HasColumnType("date")
@@ -992,12 +1064,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects.FieldKey", "Key", b1 =>
                         {
                             b1.Property<int>("ServiceTypeFieldDefinitionId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(60)
-                                .HasColumnType("nvarchar(60)")
+                                .HasColumnType("character varying(60)")
                                 .HasColumnName("key");
 
                             b1.HasKey("ServiceTypeFieldDefinitionId");
@@ -1011,12 +1083,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.ServiceTypeAggregate.ValueObjects.FieldLabel", "Label", b1 =>
                         {
                             b1.Property<int>("ServiceTypeFieldDefinitionId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(80)
-                                .HasColumnType("nvarchar(80)")
+                                .HasColumnType("character varying(80)")
                                 .HasColumnName("label");
 
                             b1.HasKey("ServiceTypeFieldDefinitionId");
@@ -1054,7 +1126,7 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.SubscriptionAggregate.SubscriptionPeriod", "Period", b1 =>
                         {
                             b1.Property<int>("SubscriptionId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<DateTime?>("EndDate")
                                 .HasColumnType("date")
@@ -1075,18 +1147,18 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.SubscriptionAggregate.SubscriptionPlan", "Plan", b1 =>
                         {
                             b1.Property<int>("SubscriptionId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<int>("MaxSecretaries")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("max_secretaries");
 
                             b1.Property<int>("MaxServices")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("max_services");
 
                             b1.Property<int>("Name")
-                                .HasColumnType("int")
+                                .HasColumnType("integer")
                                 .HasColumnName("plan_name");
 
                             b1.HasKey("SubscriptionId");
@@ -1104,17 +1176,26 @@ namespace BOOKLY.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.RefreshToken", b =>
+                {
+                    b.HasOne("BOOKLY.Domain.Aggregates.UserAggregate.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BOOKLY.Domain.Aggregates.UserAggregate.User", b =>
                 {
                     b.OwnsOne("BOOKLY.Domain.SharedKernel.Email", "Email", b1 =>
                         {
                             b1.Property<int>("UserId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Value")
                                 .IsRequired()
                                 .HasMaxLength(255)
-                                .HasColumnType("nvarchar(255)")
+                                .HasColumnType("character varying(255)")
                                 .HasColumnName("email");
 
                             b1.HasKey("UserId");
@@ -1132,12 +1213,12 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects.Password", "Password", b1 =>
                         {
                             b1.Property<int>("UserId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Hash")
                                 .IsRequired()
                                 .HasMaxLength(128)
-                                .HasColumnType("nvarchar(128)")
+                                .HasColumnType("character varying(128)")
                                 .HasColumnName("password_hash");
 
                             b1.HasKey("UserId");
@@ -1151,18 +1232,18 @@ namespace BOOKLY.Infrastructure.Migrations
                     b.OwnsOne("BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects.PersonName", "PersonName", b1 =>
                         {
                             b1.Property<int>("UserId")
-                                .HasColumnType("int");
+                                .HasColumnType("integer");
 
                             b1.Property<string>("FirstName")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
+                                .HasColumnType("character varying(100)")
                                 .HasColumnName("first_name");
 
                             b1.Property<string>("LastName")
                                 .IsRequired()
                                 .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
+                                .HasColumnType("character varying(100)")
                                 .HasColumnName("last_name");
 
                             b1.HasKey("UserId");

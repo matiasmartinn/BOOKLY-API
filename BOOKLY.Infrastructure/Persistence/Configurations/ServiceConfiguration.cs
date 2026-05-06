@@ -64,7 +64,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.PublicBookingCodeUpdatedAt)
                    .HasColumnName("public_booking_code_updated_at")
-                   .HasColumnType("datetime2");
+                   .HasColumnType("timestamp without time zone");
 
             builder.Property(x => x.Price)
                    .HasColumnName("price")
@@ -76,8 +76,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedAt)
                    .HasColumnName("created_at")
-                   .HasColumnType("datetime2")
-                   .HasDefaultValueSql("GETDATE()")
+                   .HasColumnType("timestamp without time zone")
                    .IsRequired();
 
             builder.Property(x => x.Mode)

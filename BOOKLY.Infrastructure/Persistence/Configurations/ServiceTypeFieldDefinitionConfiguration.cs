@@ -63,10 +63,12 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedOn)
                 .HasColumnName("created_on")
+                .HasColumnType("timestamp without time zone")
                 .IsRequired();
 
             builder.Property(x => x.UpdatedOn)
-                .HasColumnName("updated_on");
+                .HasColumnName("updated_on")
+                .HasColumnType("timestamp without time zone");
 
             // Relationship: ServiceType 1 - N FieldDefinitions
             builder.HasOne<ServiceType>()

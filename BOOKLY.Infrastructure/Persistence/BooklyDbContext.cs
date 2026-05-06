@@ -9,16 +9,19 @@ using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BOOKLY.Infrastructure.Persistence
 {
     public sealed class BooklyDbContext : DbContext, IUnitOfWork
     {
+        private const string TimestampWithoutTimeZone = "timestamp without time zone";
         private readonly IDomainEventDispatcher _dispatcher;
-        public BooklyDbContext(DbContextOptions<BooklyDbContext> options, IDomainEventDispatcher domainEventDispatcher) : base(options) {
-        _dispatcher = domainEventDispatcher;
+
+        public BooklyDbContext(DbContextOptions<BooklyDbContext> options, IDomainEventDispatcher domainEventDispatcher) : base(options)
+        {
+            _dispatcher = domainEventDispatcher;
         }
 
         public DbSet<Service> Services => Set<Service>();
@@ -79,18 +82,48 @@ namespace BOOKLY.Infrastructure.Persistence
         {
             try
             {
+                NormalizeUtcDateTimesForTimestampWithoutTimeZone();
                 return await base.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx)
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException postgresEx)
             {
-                throw sqlEx.Number switch
+                throw postgresEx.SqlState switch
                 {
-                    2627 or 2601 => new ConflictException("Ya existe un registro con esos datos únicos."),
-                    547 => new ConflictException("Violación de integridad referencial."),
-                    _ => new InvalidOperationException($"Error de base de datos ({sqlEx.Number}).", ex)
+                    PostgresErrorCodes.UniqueViolation => new ConflictException("Ya existe un registro con esos datos únicos."),
+                    PostgresErrorCodes.ForeignKeyViolation => new ConflictException("Violación de integridad referencial."),
+                    _ => new InvalidOperationException($"Error de base de datos ({postgresEx.SqlState}).", ex)
                 };
             }
         }
+
+        private void NormalizeUtcDateTimesForTimestampWithoutTimeZone()
+        {
+            ChangeTracker.DetectChanges();
+
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                if (entry.State is EntityState.Detached or EntityState.Deleted)
+                    continue;
+
+                foreach (var property in entry.Properties)
+                {
+                    if (property.CurrentValue is not DateTime dateTime ||
+                        dateTime.Kind != DateTimeKind.Utc ||
+                        !IsTimestampWithoutTimeZone(property.Metadata.GetColumnType()))
+                    {
+                        continue;
+                    }
+
+                    var normalized = DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+                    property.Metadata.PropertyInfo?.SetValue(entry.Entity, normalized);
+                    property.CurrentValue = normalized;
+                }
+            }
+        }
+
+        private static bool IsTimestampWithoutTimeZone(string? columnType)
+            => string.Equals(columnType, TimestampWithoutTimeZone, StringComparison.OrdinalIgnoreCase);
+
         public Task<int> SaveChanges(CancellationToken cancellationToken = default)
             => SaveChangesAsync(cancellationToken);
         protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -26,11 +26,9 @@ namespace BOOKLY.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("BooklyDb");
-            if (string.IsNullOrWhiteSpace(connectionString))
-                throw new InvalidOperationException("ConnectionStrings:BooklyDb es requerida.");
+            var connectionString = configuration.GetConnectionString("BooklyDb")
+                 ?? throw new InvalidOperationException("ConnectionStrings:BooklyDb es requerida.");
 
-            var normalizedConnectionString = SqlServerConnectionStringNormalizer.Normalize(connectionString);
 
             var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
                 ?? throw new InvalidOperationException("JwtSettings es requerida.");
@@ -49,7 +47,7 @@ namespace BOOKLY.Infrastructure
 
             services.AddDbContext<BooklyDbContext>(options =>
             {
-                options.UseSqlServer(normalizedConnectionString);
+                options.UseNpgsql(connectionString);
 
 #if DEBUG
                 options.EnableSensitiveDataLogging();

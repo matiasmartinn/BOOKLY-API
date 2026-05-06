@@ -4,6 +4,7 @@ using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
@@ -19,7 +20,7 @@ namespace BOOKLY.Infrastructure.Tests;
 
 public sealed class BooklyDbContextDomainEventsTests
 {
-    private static readonly DateTime ReferenceNow = new(2026, 3, 27, 10, 0, 0);
+    private static readonly DateTime ReferenceNow = new(2026, 3, 27, 10, 0, 0, DateTimeKind.Unspecified);
 
     [Fact]
     public async Task SaveChanges_ShouldPersistHistory_WhenAppointmentIsCreated()
@@ -139,6 +140,41 @@ public sealed class BooklyDbContextDomainEventsTests
         Assert.Equal("Lovelace", history[0].User!.PersonName.LastName);
     }
 
+    [Fact]
+    public async Task SaveChanges_ShouldNormalizeOnlyTimestampWithoutTimeZoneDateTimes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        await using var scope = BuildServices(connection).CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var seed = await SeedAsync(context);
+        var utcNow = new DateTime(2026, 3, 27, 13, 0, 0, DateTimeKind.Utc);
+
+        var appointment = Appointment.Create(
+            seed.Service.Id,
+            null,
+            CreateClient(),
+            utcNow.AddDays(1),
+            BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects.Duration.Create(60),
+            null,
+            utcNow);
+        var refreshToken = RefreshToken.Create(seed.Owner.Id, RefreshToken.GenerateToken(), utcNow);
+
+        context.Appointments.Add(appointment);
+        context.RefreshTokens.Add(refreshToken);
+        await context.SaveChangesAsync();
+
+        var history = await context.AppointmentStatusHistories.SingleAsync();
+
+        Assert.Equal(DateTimeKind.Unspecified, appointment.StartDateTime.Kind);
+        Assert.Equal(DateTimeKind.Unspecified, appointment.CreatedOn.Kind);
+        Assert.Equal(DateTimeKind.Unspecified, history.OccurredOn.Kind);
+        Assert.Equal(DateTimeKind.Utc, refreshToken.CreatedAt.Kind);
+        Assert.Equal(DateTimeKind.Utc, refreshToken.ExpiresAt.Kind);
+    }
+
     private static async Task<SeedData> SeedAsync(BooklyDbContext context)
     {
         var owner = User.CreateOwner(
@@ -148,12 +184,14 @@ public sealed class BooklyDbContextDomainEventsTests
             ReferenceNow);
 
         context.Users.Add(owner);
-        await context.SaveChangesAsync();
 
-        var serviceTypeId = await context.ServiceTypes
-            .OrderBy(x => x.Id)
-            .Select(x => x.Id)
-            .FirstAsync();
+        var serviceType = ServiceType.Create(
+            "Consultas",
+            "consultas");
+
+        context.ServiceTypes.Add(serviceType);
+
+        await context.SaveChangesAsync();
 
         var service = Service.Create(
             "Consulta general",
@@ -161,7 +199,7 @@ public sealed class BooklyDbContextDomainEventsTests
             "consulta-general",
             description: null,
             phoneNumber: null,
-            serviceType: serviceTypeId,
+            serviceType: serviceType.Id,
             createdAt: ReferenceNow,
             duration: Duration.Create(60),
             capacity: Capacity.Create(1),
@@ -171,7 +209,7 @@ public sealed class BooklyDbContextDomainEventsTests
         context.Services.Add(service);
         await context.SaveChangesAsync();
 
-        return new SeedData(service);
+        return new SeedData(service, owner);
     }
 
     private static ServiceProvider BuildServices(SqliteConnection connection)
@@ -195,5 +233,5 @@ public sealed class BooklyDbContextDomainEventsTests
             BOOKLY.Domain.SharedKernel.Email.Create("linus@example.com"));
     }
 
-    private sealed record SeedData(Service Service);
+    private sealed record SeedData(Service Service, User Owner);
 }
