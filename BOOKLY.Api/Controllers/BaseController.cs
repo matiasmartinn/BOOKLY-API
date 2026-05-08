@@ -164,6 +164,13 @@ namespace BOOKLY.Api.Controllers
                     detail: "Ocurrió un error inesperado.",
                     instance: instance),
 
+                ErrorType.RateLimitExceeded => Problem(
+                     type: "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+                    title: "Demasiadas solicitudes",
+                    statusCode: StatusCodes.Status429TooManyRequests,
+                    detail: error.Message,
+                    instance: instance),
+
                 _ => Problem(
                     type: "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1",
                     title: "Error inesperado",

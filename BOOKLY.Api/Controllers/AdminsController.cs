@@ -4,11 +4,13 @@ using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
     [Route("api/admins")]
+    [EnableRateLimiting("auth-policy")]
     public class AdminsController : BaseController
     {
         private readonly IUserService _userService;

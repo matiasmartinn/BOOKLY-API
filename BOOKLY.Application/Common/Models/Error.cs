@@ -8,7 +8,8 @@
         Domain,
         Unauthorized,
         Forbidden,
-        Unexpected
+        Unexpected,
+        RateLimitExceeded
     }
     public sealed record Error(ErrorType Type, string Message, string? Code = null)
     {

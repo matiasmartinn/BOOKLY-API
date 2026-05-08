@@ -3,12 +3,14 @@ using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.PublicBooking.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
     [AllowAnonymous]
     [Route("api/public/services")]
+    [EnableRateLimiting("booking-policy")]
     public sealed class PublicServicesController : BaseController
     {
         private readonly IPublicBookingService _publicBookingService;

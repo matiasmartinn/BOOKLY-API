@@ -5,6 +5,7 @@ using BOOKLY.Application.Services.ServiceAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text.Json;
 
 namespace BOOKLY.Api.Controllers
