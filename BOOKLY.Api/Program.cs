@@ -10,15 +10,12 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Configuración ─────────────────────────────────────────────────────────────
-builder.Configuration.Sources.Clear();
 builder.Configuration
     .SetBasePath(builder.Environment.ContentRootPath)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile(
-        $"appsettings.{builder.Environment.EnvironmentName}.json",
-        optional: true,
-        reloadOnChange: true);
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
+
 
 // ── Servicios ─────────────────────────────────────────────────────────────────
 
@@ -142,7 +139,11 @@ builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-await app.Services.SeedBooklyDataAsync();
+if (app.Environment.IsDevelopment() ||
+    builder.Configuration.GetValue<bool>("Seed:RunOnStartup"))
+{
+    await app.Services.SeedBooklyDataAsync();
+}
 
 app.UseForwardedHeaders();  
 app.UseExceptionHandling();  
@@ -158,9 +159,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();        
 app.UseCors(FrontendPolicy);      
+
 app.UseAuthentication();          
+app.UseRateLimiter();         
 app.UseAuthorization();           
-app.UseRateLimiter();             
 
 app.MapHealthChecks("/health");
 app.MapControllers();
