@@ -59,7 +59,7 @@ namespace BOOKLY.Api.Controllers
             }
 
             return HandleAuthResult(result);
-        }
+        }   
 
         [AllowAnonymous]
         [HttpPost("logout")]

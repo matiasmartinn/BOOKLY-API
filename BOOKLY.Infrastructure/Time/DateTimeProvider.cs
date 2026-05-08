@@ -9,7 +9,8 @@ namespace BOOKLY.Infrastructure.Time
 
         public DateTime NowArgentina()
         {
-            return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
+            var argentinaNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ArgentinaTimeZone);
+            return DateTime.SpecifyKind(argentinaNow, DateTimeKind.Unspecified);
         }
 
         public DateTime UtcNow()

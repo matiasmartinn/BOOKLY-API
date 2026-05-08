@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BOOKLY.Infrastructure.Migrations
 {
     [DbContext(typeof(BooklyDbContext))]
-    [Migration("20260506183635_InitialPostgres")]
-    partial class InitialPostgres
+    [Migration("20260508041522_fixDateTime")]
+    partial class fixDateTime
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

@@ -198,6 +198,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         public async Task<Result<AppointmentDto>> CreateAppointment(CreateAppointmentDto dto, CancellationToken ct = default)
         {
             var now = _dateTimeProvider.NowArgentina();
+            var requestedStart = dto.StartDateTime;
 
             var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(dto.ServiceId, ct);
             if (service == null)
@@ -222,7 +223,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             var slotValidation = await ValidateSlotAvailability(
                 service,
-                dto.StartDateTime,
+                requestedStart,
                 null,
                 requireActiveService: true,
                 ct);
@@ -236,7 +237,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     dto.ServiceId,
                     dto.AssignedSecretaryId,
                     ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)),
-                    dto.StartDateTime,
+                    requestedStart,
                     service.DurationMinutes,
                     dto.ClientNotes,
                     now,
@@ -286,6 +287,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         public async Task<Result<AppointmentDto>> RescheduleAppointment(int id, RescheduleAppointmentDto dto, CancellationToken ct = default)
         {
             var now = _dateTimeProvider.NowArgentina();
+
             var appointment = await _repository.GetOne(id, ct);
             if (appointment == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("Turno"));
@@ -425,7 +427,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             return Result.Success();
         }
-
         private async Task NotifyAppointmentCreated(Service service, Appointment appointment, CancellationToken ct)
         {
             var owner = await _userRepository.GetOne(service.OwnerId, ct);
