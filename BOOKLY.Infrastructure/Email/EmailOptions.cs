@@ -5,6 +5,7 @@ namespace BOOKLY.Infrastructure.Email
         public const string SectionName = "Email";
         public string SenderName { get; init; } = "BOOKLY";
         public string SenderAddress { get; init; } = string.Empty;
+        public string? ApiKey { get; set; }
         public SmtpOptions Smtp { get; init; } = new();
     }
 

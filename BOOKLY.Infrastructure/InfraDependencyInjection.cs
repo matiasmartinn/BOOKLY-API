@@ -79,6 +79,8 @@ namespace BOOKLY.Infrastructure
 
             services.AddAuthorization();
 
+            services.AddHttpClient<BrevoEmailService>();
+
             services.AddScoped<IServiceRepository, ServiceRepository>();
             services.AddScoped<IAdminRepository, AdminRepository>();
 
@@ -89,7 +91,7 @@ namespace BOOKLY.Infrastructure
             services.AddScoped<IInvitationTokenGenerator, InvitationTokenGenerator>();
             services.AddScoped<IJwtTokenService, JwtTokenService>();
             services.AddScoped<IUserTokenRepository, UserInvitationRepository>();
-            services.AddScoped<IEmailService, SmtpEmailService>();
+            services.AddScoped<IEmailService, BrevoEmailService>();
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAppointmentRepository, AppointmentRepository>();

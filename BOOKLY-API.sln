@@ -14,6 +14,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la solución", "Elementos de la solución", "{2649034C-7A33-4E1F-83CE-87B747903B57}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		Dockerfile.txt = Dockerfile.txt
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BOOKLY.Domain.Tests", "BOOKLY.Domain.Tests\BOOKLY.Domain.Tests.csproj", "{16C86D30-53EF-4FBB-A6FD-A0AF69E22D08}"
