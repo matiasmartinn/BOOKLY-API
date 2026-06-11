@@ -81,10 +81,11 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetByDay([FromQuery] AppointmentDayQueryDto dto, CancellationToken ct)
         {
-            var access = await EnsureAppointmentQueryAccess(dto.OwnerId, dto.ServiceId, ct);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var ownerResolution = await ResolveAppointmentQueryOwner(dto.OwnerId, dto.ServiceId, ct);
+            if (ownerResolution.IsFailure)
+                return HandleResult(Result.Failure(ownerResolution.Error));
 
+            dto = dto with { OwnerId = ownerResolution.Data };
             return HandleResult(await _appointmentService.GetByDay(dto, ct));
         }
 
@@ -97,10 +98,11 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Search([FromQuery] AppointmentQueryDto dto, CancellationToken ct)
         {
-            var access = await EnsureAppointmentQueryAccess(dto.OwnerId, dto.ServiceId, ct);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var ownerResolution = await ResolveAppointmentQueryOwner(dto.OwnerId, dto.ServiceId, ct);
+            if (ownerResolution.IsFailure)
+                return HandleResult(Result.Failure(ownerResolution.Error));
 
+            dto = dto with { OwnerId = ownerResolution.Data };
             return HandleResult(await _appointmentService.SearchAppointments(dto, ct));
         }
 
@@ -262,10 +264,19 @@ namespace BOOKLY.Api.Controllers
 
         #endregion
 
-        private async Task<Result> EnsureAppointmentQueryAccess(int? ownerId, int? serviceId, CancellationToken ct)
+        /// <summary>
+        /// Deriva el owner efectivo de una consulta de turnos. Devuelve null cuando la
+        /// consulta queda acotada por servicio (caso secretarias) en lugar de por owner.
+        /// </summary>
+        private async Task<Result<int?>> ResolveAppointmentQueryOwner(int? ownerId, int? serviceId, CancellationToken ct)
         {
-            if (ownerId.HasValue)
-                return EnsureOwnerAccess(ownerId.Value);
+            if (ownerId.HasValue || (!serviceId.HasValue && CurrentUser.IsOwner))
+            {
+                var resolvedOwnerId = ResolveOwnerId(ownerId);
+                return resolvedOwnerId.IsFailure
+                    ? Result<int?>.Failure(resolvedOwnerId.Error)
+                    : Result<int?>.Success(resolvedOwnerId.Data);
+            }
 
             if (serviceId.HasValue)
             {
@@ -274,11 +285,11 @@ namespace BOOKLY.Api.Controllers
                     SecretaryPermission.ViewAppointments,
                     ct);
                 return serviceAccess.IsFailure
-                    ? Result.Failure(serviceAccess.Error)
-                    : Result.Success();
+                    ? Result<int?>.Failure(serviceAccess.Error)
+                    : Result<int?>.Success(null);
             }
 
-            return Result.Failure(Error.Validation("Debes indicar un ownerId o un serviceId."));
+            return Result<int?>.Failure(Error.Validation("Debes indicar un ownerId o un serviceId."));
         }
 
         private async Task<Result<AppointmentDto>> GetAppointmentWithPermission(

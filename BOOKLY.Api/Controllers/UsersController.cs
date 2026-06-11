@@ -46,11 +46,11 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> CreateSecretary(int ownerId, [FromBody] CreateSecretaryDto dto, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            var result = await _userService.CreateSecretary(ownerId, dto, ct);
+            var result = await _userService.CreateSecretary(resolvedOwnerId.Data, dto, ct);
             return HandleCreated(result, nameof(GetById), new { id = result.Data?.User.Id });
         }
 
@@ -60,11 +60,11 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetSecretariesByOwner(int ownerId, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _userService.GetSecretariesByOwner(ownerId, ct));
+            return HandleResult(await _userService.GetSecretariesByOwner(resolvedOwnerId.Data, ct));
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
@@ -75,13 +75,13 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> ActivateSecretary(int id, CancellationToken ct)
         {
             int? ownerId = null;
-            if (User.IsInRole(Roles.Owner))
+            if (CurrentUser.IsOwner)
             {
-                var currentUserId = GetAuthenticatedUserId();
-                if (currentUserId.IsFailure)
-                    return HandleResult(Result.Failure(currentUserId.Error));
+                var resolvedOwnerId = ResolveOwnerId();
+                if (resolvedOwnerId.IsFailure)
+                    return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-                ownerId = currentUserId.Data;
+                ownerId = resolvedOwnerId.Data;
             }
 
             return HandleResult(await _userService.ActivateSecretary(id, ownerId, ct));
@@ -94,13 +94,13 @@ namespace BOOKLY.Api.Controllers
         public async Task<IActionResult> DeactivateSecretary(int id, CancellationToken ct)
         {
             int? ownerId = null;
-            if (User.IsInRole(Roles.Owner))
+            if (CurrentUser.IsOwner)
             {
-                var currentUserId = GetAuthenticatedUserId();
-                if (currentUserId.IsFailure)
-                    return HandleResult(Result.Failure(currentUserId.Error));
+                var resolvedOwnerId = ResolveOwnerId();
+                if (resolvedOwnerId.IsFailure)
+                    return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-                ownerId = currentUserId.Data;
+                ownerId = resolvedOwnerId.Data;
             }
 
             return HandleResult(await _userService.DeactivateSecretary(id, ownerId, ct));

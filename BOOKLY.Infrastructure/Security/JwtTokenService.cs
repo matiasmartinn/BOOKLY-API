@@ -4,6 +4,7 @@ using System.Text;
 using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Domain.Aggregates.UserAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Interfaces;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -29,7 +30,7 @@ namespace BOOKLY.Infrastructure.Security
             var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
             var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
-            var claims = new[]
+            var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email.Value),
@@ -37,6 +38,11 @@ namespace BOOKLY.Infrastructure.Security
                 new Claim("fullName", user.PersonName.FullName),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+
+            // Para un Owner, el tenant es él mismo: se incluye explícito para que el
+            // backend derive el ownerId del token y no del request.
+            if (user.Role == UserRole.Owner)
+                claims.Add(new Claim(BooklyClaims.OwnerId, user.Id.ToString()));
 
             var token = new JwtSecurityToken(
                 issuer: _jwtSettings.Issuer,

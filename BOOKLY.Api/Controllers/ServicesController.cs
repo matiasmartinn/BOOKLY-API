@@ -45,13 +45,13 @@ namespace BOOKLY.Api.Controllers
         [HttpGet]
         [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetServicesByOwner([FromQuery] int ownerId, CancellationToken ct)
+        public async Task<IActionResult> GetServicesByOwner([FromQuery] int? ownerId, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _serviceApplicationService.GetServicesByOwner(ownerId, ct));
+            return HandleResult(await _serviceApplicationService.GetServicesByOwner(resolvedOwnerId.Data, ct));
         }
 
         /// <summary>
@@ -62,10 +62,11 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Create([FromBody] CreateServiceDto dto, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(dto.OwnerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(dto.OwnerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
+            dto = dto with { OwnerId = resolvedOwnerId.Data };
             var result = await _serviceApplicationService.CreateService(dto, ct);
             return HandleCreated(result, nameof(GetById), new { id = result.Data?.Id });
         }

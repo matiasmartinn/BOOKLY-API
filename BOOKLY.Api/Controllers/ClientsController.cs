@@ -1,3 +1,4 @@
+using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
@@ -22,39 +23,39 @@ namespace BOOKLY.Api.Controllers
         [HttpGet]
         [ProducesResponseType(typeof(IReadOnlyCollection<ClientListItemDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetByOwner([FromQuery] int ownerId, [FromQuery] string? search, CancellationToken ct)
+        public async Task<IActionResult> GetByOwner([FromQuery] int? ownerId, [FromQuery] string? search, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _clientService.GetByOwner(ownerId, search, ct));
+            return HandleResult(await _clientService.GetByOwner(resolvedOwnerId.Data, search, ct));
         }
 
         [HttpGet("detail")]
         [ProducesResponseType(typeof(ClientDetailDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetDetail([FromQuery] int ownerId, [FromQuery] string email, CancellationToken ct)
+        public async Task<IActionResult> GetDetail([FromQuery] int? ownerId, [FromQuery] string email, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _clientService.GetDetail(ownerId, email, ct));
+            return HandleResult(await _clientService.GetDetail(resolvedOwnerId.Data, email, ct));
         }
 
         [HttpGet("appointments")]
         [ProducesResponseType(typeof(IReadOnlyCollection<AppointmentListItemDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetAppointmentHistory([FromQuery] int ownerId, [FromQuery] string email, CancellationToken ct)
+        public async Task<IActionResult> GetAppointmentHistory([FromQuery] int? ownerId, [FromQuery] string email, CancellationToken ct)
         {
-            var access = EnsureOwnerAccess(ownerId);
-            if (access.IsFailure)
-                return HandleResult(access);
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _clientService.GetAppointmentHistory(ownerId, email, ct));
+            return HandleResult(await _clientService.GetAppointmentHistory(resolvedOwnerId.Data, email, ct));
         }
     }
 }

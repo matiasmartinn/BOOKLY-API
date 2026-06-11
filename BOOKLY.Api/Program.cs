@@ -1,6 +1,8 @@
 ﻿using System.Threading.RateLimiting;
 using BOOKLY.Api.Middleware;
+using BOOKLY.Api.Security;
 using BOOKLY.Application.Common;
+using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.DependencyInjection;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
@@ -135,6 +137,9 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 var app = builder.Build();

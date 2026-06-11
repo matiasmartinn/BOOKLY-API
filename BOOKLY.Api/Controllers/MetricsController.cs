@@ -28,19 +28,15 @@ namespace BOOKLY.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetAppointmentMetrics([FromQuery] AppointmentMetricsQueryDto dto, CancellationToken ct)
         {
-            if (User.IsInRole(Roles.Owner))
+            // Owner: el ownerId efectivo siempre sale del token.
+            // Admin: puede consultar un owner puntual o métricas globales (sin ownerId).
+            if (CurrentUser.IsOwner)
             {
-                var currentUserId = GetAuthenticatedUserId();
-                if (currentUserId.IsFailure)
-                    return HandleResult(Result.Failure(currentUserId.Error));
+                var resolvedOwnerId = ResolveOwnerId(dto.OwnerId);
+                if (resolvedOwnerId.IsFailure)
+                    return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-                dto = dto with { OwnerId = currentUserId.Data };
-            }
-            else if (dto.OwnerId.HasValue)
-            {
-                var access = EnsureOwnerAccess(dto.OwnerId.Value);
-                if (access.IsFailure)
-                    return HandleResult(access);
+                dto = dto with { OwnerId = resolvedOwnerId.Data };
             }
 
             return HandleResult(await _metricsService.GetAppointmentMetrics(dto, ct));
