@@ -27,14 +27,10 @@ namespace BOOKLY.Infrastructure.Repositories
                 .FirstOrDefaultAsync(u => u.Email.Value == normalizedEmail, ct);
         }
 
-        public Task<RefreshToken?> GetRefreshToken(
-            string tokenHash,
-            string? legacyRawToken = null,
-            CancellationToken ct = default)
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default)
         {
             return dbContext.RefreshTokens.FirstOrDefaultAsync(
-                refreshToken => refreshToken.Token == tokenHash ||
-                    (!string.IsNullOrWhiteSpace(legacyRawToken) && refreshToken.Token == legacyRawToken),
+                refreshToken => refreshToken.Token == tokenHash,
                 ct);
         }
 

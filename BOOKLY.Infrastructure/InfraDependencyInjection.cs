@@ -29,11 +29,9 @@ namespace BOOKLY.Infrastructure
             var connectionString = configuration.GetConnectionString("BooklyDb")
                  ?? throw new InvalidOperationException("ConnectionStrings:BooklyDb es requerida.");
 
-
             var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
                 ?? throw new InvalidOperationException("JwtSettings es requerida.");
             jwtSettings.Validate();
-
 
             var emailOptions = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
                 ?? throw new InvalidOperationException("Email es requerida.");
@@ -79,7 +77,12 @@ namespace BOOKLY.Infrastructure
 
             services.AddAuthorization();
 
-            services.AddHttpClient<BrevoEmailService>();
+            // El envio a Brevo es via API REST (443); Railway bloquea SMTP.
+            // Timeout corto: el envio corre dentro del request HTTP y no debe colgarlo.
+            services.AddHttpClient<BrevoEmailService>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
 
             services.AddScoped<IServiceRepository, ServiceRepository>();
             services.AddScoped<IAdminRepository, AdminRepository>();
@@ -91,7 +94,9 @@ namespace BOOKLY.Infrastructure
             services.AddScoped<IInvitationTokenGenerator, InvitationTokenGenerator>();
             services.AddScoped<IJwtTokenService, JwtTokenService>();
             services.AddScoped<IUserTokenRepository, UserInvitationRepository>();
-            services.AddScoped<IEmailService, BrevoEmailService>();
+            // Resolver via el typed client de AddHttpClient: registrar la implementacion
+            // directo aqui crearia otra instancia con un HttpClient default sin timeout.
+            services.AddScoped<IEmailService>(sp => sp.GetRequiredService<BrevoEmailService>());
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAppointmentRepository, AppointmentRepository>();

@@ -68,9 +68,20 @@ namespace BOOKLY.Application.Services.AuthAggregate
 
             var now = _dateTimeProvider.UtcNow();
             var refreshTokenHash = _tokenHashingService.HashToken(refreshToken);
-            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, refreshToken, ct);
+            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, ct);
 
-            if (storedRefreshToken is null || !storedRefreshToken.IsValid(now))
+            if (storedRefreshToken is null)
+                return Result<AuthResult>.Failure(Error.Unauthorized("Refresh token invalido o vencido."));
+
+            if (storedRefreshToken.IsRevoked)
+            {
+                // Reuso de un token ya rotado: posible robo, se cierran todas las sesiones del usuario.
+                await _userRepository.RevokeAllUserTokens(storedRefreshToken.UserId, ct);
+                await _unitOfWork.SaveChanges(ct);
+                return Result<AuthResult>.Failure(Error.Unauthorized("Refresh token invalido o vencido."));
+            }
+
+            if (!storedRefreshToken.IsValid(now))
                 return Result<AuthResult>.Failure(Error.Unauthorized("Refresh token invalido o vencido."));
 
             var user = await _userRepository.GetById(storedRefreshToken.UserId, ct);
@@ -106,7 +117,7 @@ namespace BOOKLY.Application.Services.AuthAggregate
                 return Result.Failure(Error.Unauthorized("El refresh token es requerido."));
 
             var refreshTokenHash = _tokenHashingService.HashToken(refreshToken);
-            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, refreshToken, ct);
+            var storedRefreshToken = await _userRepository.GetRefreshToken(refreshTokenHash, ct);
             if (storedRefreshToken is null || !storedRefreshToken.IsValid(_dateTimeProvider.UtcNow()))
             {
                 return Result.Failure(Error.Unauthorized("Refresh token invalido o vencido."));

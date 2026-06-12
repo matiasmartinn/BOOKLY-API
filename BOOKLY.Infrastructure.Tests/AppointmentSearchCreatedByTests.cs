@@ -323,7 +323,7 @@ public sealed class AppointmentSearchCreatedByTests
         public Task<User?> GetOne(int id, CancellationToken ct = default) => Task.FromResult<User?>(null);
         public Task<User?> GetById(int id, CancellationToken ct = default) => GetOne(id, ct);
         public Task<User?> GetByEmail(string email, CancellationToken ct = default) => Task.FromResult<User?>(null);
-        public Task<RefreshToken?> GetRefreshToken(string tokenHash, string? legacyRawToken = null, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default) => Task.FromResult(false);
         public Task AddOne(User user, CancellationToken ct = default) => throw new NotImplementedException();
         public Task AddRefreshToken(RefreshToken refreshToken, CancellationToken ct = default) => Task.CompletedTask;
