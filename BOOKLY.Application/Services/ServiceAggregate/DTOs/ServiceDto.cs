@@ -19,6 +19,8 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         public int DurationMinutes { get; init; }
         public int Capacity { get; init; }
         public string Mode { get; init; } = null!;
+        public int AttendanceClosingMode { get; init; }
+        public string AttendanceClosingModeName { get; init; } = null!;
         public bool IsActive { get; init; }
         public decimal? Price { get; init; }
         public bool IsPublicBookingEnabled { get; init; }

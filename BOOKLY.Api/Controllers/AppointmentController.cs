@@ -262,6 +262,29 @@ namespace BOOKLY.Api.Controllers
             return HandleResult(await _appointmentService.MarkAsNoShow(id, currentUserId.Data, ct));
         }
 
+        /// <summary>
+        /// Marca como asistidos los turnos pendientes vencidos (anteriores al día actual)
+        /// de los servicios del owner configurados con cierre automático de asistencia.
+        /// Los servicios con cierre manual no se modifican.
+        /// </summary>
+        [HttpPost("resolve-expired")]
+        [ProducesResponseType(typeof(ResolveExpiredAppointmentsResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> ResolveExpiredPending(CancellationToken ct)
+        {
+            var ownerId = ResolveOwnerId(null);
+            if (ownerId.IsFailure)
+                return HandleResult(Result<ResolveExpiredAppointmentsResultDto>.Failure(ownerId.Error));
+
+            var currentUserId = GetAuthenticatedUserId();
+            if (currentUserId.IsFailure)
+                return HandleResult(Result<ResolveExpiredAppointmentsResultDto>.Failure(currentUserId.Error));
+
+            return HandleResult(
+                await _appointmentService.ResolveExpiredPendingAppointments(ownerId.Data, currentUserId.Data, ct));
+        }
+
         #endregion
 
         /// <summary>

@@ -29,6 +29,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
         public Mode Mode { get; private set; }
         public bool IsActive { get; private set; }
         public decimal? Price { get; private set; }
+        public AttendanceClosingMode AttendanceClosingMode { get; private set; } = AttendanceClosingMode.Manual;
 
         public bool IsPublicBookingEnabled { get; private set; } = true;
         public string PublicBookingCode { get; private set; } = null!;
@@ -113,6 +114,7 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
                 Capacity = capacity,
                 Mode = mode,
                 Price = price,
+                AttendanceClosingMode = AttendanceClosingMode.Manual,
                 IsActive = true,
                 IsPublicBookingEnabled = true,
                 PublicBookingCode = EnsureValidPublicBookingCode(publicBookingCode ?? GeneratePublicBookingCode()),
@@ -167,6 +169,15 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             if (Price != price)
                 Price = price;
         }
+        public void UpdateAttendanceClosingMode(AttendanceClosingMode attendanceClosingMode)
+        {
+            if (!Enum.IsDefined(typeof(AttendanceClosingMode), attendanceClosingMode))
+                throw new DomainException("El modo de cierre de asistencia es inválido.");
+
+            if (AttendanceClosingMode != attendanceClosingMode)
+                AttendanceClosingMode = attendanceClosingMode;
+        }
+
         public void Deactivate()
         {
             IsActive = false;

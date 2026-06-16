@@ -13,6 +13,10 @@ namespace BOOKLY.Domain.Interfaces
             DateOnly to,
             DateTime now,
             CancellationToken ct = default);
+        Task<List<Appointment>> GetExpiredPendingByServices(
+            IReadOnlyCollection<int> serviceIds,
+            DateTime startOfToday,
+            CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default);
         Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default);
         Task<IReadOnlyCollection<Appointment>> SearchByServices(

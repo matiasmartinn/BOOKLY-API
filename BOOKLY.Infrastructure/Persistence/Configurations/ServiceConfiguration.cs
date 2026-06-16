@@ -1,5 +1,6 @@
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,12 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.Property(x => x.Mode)
                    .HasColumnName("mode")
                    .HasConversion<int>();
+
+            builder.Property(x => x.AttendanceClosingMode)
+                   .HasColumnName("attendance_closing_mode")
+                   .HasConversion<int>()
+                   .HasDefaultValue(AttendanceClosingMode.Manual)
+                   .IsRequired();
 
             builder.HasIndex(x => x.OwnerId)
                    .HasDatabaseName("ix_services_owner_id");

@@ -206,6 +206,9 @@ public sealed class AppointmentSearchCreatedByTests
         public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
             => Task.FromResult(new List<Appointment>());
 
+        public Task<List<Appointment>> GetExpiredPendingByServices(IReadOnlyCollection<int> serviceIds, DateTime startOfToday, CancellationToken ct = default)
+            => Task.FromResult(new List<Appointment>());
+
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
 

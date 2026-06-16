@@ -18,6 +18,8 @@ namespace BOOKLY.Application.Mappings
                 .ForMember(d => d.PlaceName, o => o.MapFrom(s => s.Location != null ? s.Location.PlaceName : null))
                 .ForMember(d => d.Address, o => o.MapFrom(s => s.Location != null ? s.Location.Address : null))
                 .ForMember(d => d.Mode, o => o.MapFrom(s => s.Mode.ToString()))
+                .ForMember(d => d.AttendanceClosingMode, o => o.MapFrom(s => (int)s.AttendanceClosingMode))
+                .ForMember(d => d.AttendanceClosingModeName, o => o.MapFrom(s => s.AttendanceClosingMode.ToString()))
                 .ForMember(d => d.SecretaryPermissions, o => o.MapFrom(s => s.ServiceSecretaries))
                 .ForMember(d => d.Schedules, o => o.MapFrom(s => s.ServiceSchedules));
 

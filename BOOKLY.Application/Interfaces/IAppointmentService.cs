@@ -18,5 +18,6 @@ namespace BOOKLY.Application.Interfaces
         Task<Result> MarkAsCancel(int id, CancelAppointmentDto dto, CancellationToken ct = default);
         Task<Result> MarkAsAttended(int id, int? userId = null, CancellationToken ct = default);
         Task<Result> MarkAsNoShow(int id, int? userId = null, CancellationToken ct = default);
+        Task<Result<ResolveExpiredAppointmentsResultDto>> ResolveExpiredPendingAppointments(int ownerId, int? userId = null, CancellationToken ct = default);
     }
 }

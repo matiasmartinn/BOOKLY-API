@@ -16,6 +16,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate.DTOs
         public int? DurationMinutes { get; init; }
         public int? Capacity { get; init; }
         public int? Mode { get; init; }
+        public int? AttendanceClosingMode { get; init; }
         public decimal? Price { get; init; }
 
         [JsonIgnore]

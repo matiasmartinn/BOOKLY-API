@@ -6,6 +6,7 @@ using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
@@ -374,6 +375,46 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _repository.Update(appointment);
             await _unitOfWork.SaveChanges(ct);
             return Result.Success();
+        }
+
+        public async Task<Result<ResolveExpiredAppointmentsResultDto>> ResolveExpiredPendingAppointments(
+            int ownerId,
+            int? userId = null,
+            CancellationToken ct = default)
+        {
+            var now = _dateTimeProvider.NowArgentina();
+            var startOfToday = now.Date;
+
+            var services = await _serviceRepository.GetServicesByOwner(ownerId, ct);
+            var autoCloseServiceIds = services
+                .Where(s => s.AttendanceClosingMode == AttendanceClosingMode.AutoMarkAsAttended)
+                .Select(s => s.Id)
+                .ToList();
+
+            if (autoCloseServiceIds.Count == 0)
+                return Result<ResolveExpiredAppointmentsResultDto>.Success(
+                    new ResolveExpiredAppointmentsResultDto(0));
+
+            var expiredAppointments = await _repository.GetExpiredPendingByServices(autoCloseServiceIds, startOfToday, ct);
+
+            try
+            {
+                foreach (var appointment in expiredAppointments)
+                {
+                    appointment.MarkAsAttended(now, NormalizeActorUserId(userId));
+                    _repository.Update(appointment);
+                }
+            }
+            catch (DomainException ex)
+            {
+                return Result<ResolveExpiredAppointmentsResultDto>.Failure(Error.Validation(ex.Message));
+            }
+
+            if (expiredAppointments.Count > 0)
+                await _unitOfWork.SaveChanges(ct);
+
+            return Result<ResolveExpiredAppointmentsResultDto>.Success(
+                new ResolveExpiredAppointmentsResultDto(expiredAppointments.Count));
         }
 
         public async Task<Result> MarkAsNoShow(int id, int? userId = null, CancellationToken ct = default)

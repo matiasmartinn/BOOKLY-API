@@ -217,6 +217,11 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 {
                     service.ChangePrice(dto.Price);
                 }
+
+                if (dto.AttendanceClosingMode != null)
+                {
+                    service.UpdateAttendanceClosingMode((AttendanceClosingMode)dto.AttendanceClosingMode.Value);
+                }
             }
             catch (DomainException ex)
             {

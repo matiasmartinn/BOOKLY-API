@@ -3,6 +3,7 @@ using System;
 using BOOKLY.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BOOKLY.Infrastructure.Migrations
 {
     [DbContext(typeof(BooklyDbContext))]
-    partial class BooklyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260612035855_AddServiceAttendanceClosingMode")]
+    partial class AddServiceAttendanceClosingMode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
