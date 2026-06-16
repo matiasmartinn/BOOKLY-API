@@ -3,6 +3,7 @@ using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using DomainEmail = BOOKLY.Domain.SharedKernel.Email;
 
@@ -10,9 +11,6 @@ namespace BOOKLY.Infrastructure.Persistence
 {
     public static class BooklyDataSeeder
     {
-        private const string InitialAdminEmail = "admin@bookly.local";
-        private const string InitialAdminPassword = "Admin123!";
-
         private static readonly SeedServiceType[] InitialServiceTypes =
         [
             new("Peluquería", "#E11D48", "scissors"),
@@ -32,12 +30,14 @@ namespace BOOKLY.Infrastructure.Persistence
         public static async Task SeedBooklyDataAsync(this IServiceProvider services, CancellationToken ct = default)
         {
             using var scope = services.CreateScope();
+
+            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var dbContext = scope.ServiceProvider.GetRequiredService<BooklyDbContext>();
             var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
             var dateTimeProvider = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
 
             await SeedServiceTypes(dbContext, ct);
-            await SeedInitialAdmin(dbContext, passwordHasher, dateTimeProvider, ct);
+            await SeedInitialAdmin(dbContext, passwordHasher, dateTimeProvider, configuration, ct);
         }
 
         private static async Task SeedServiceTypes(BooklyDbContext dbContext, CancellationToken ct)
@@ -49,6 +49,7 @@ namespace BOOKLY.Infrastructure.Persistence
                 .ToDictionary(serviceType => serviceType.Name, StringComparer.OrdinalIgnoreCase);
 
             var changed = false;
+
             foreach (var seedItem in InitialServiceTypes)
             {
                 if (serviceTypesByName.TryGetValue(seedItem.Name, out var serviceType))
@@ -65,6 +66,7 @@ namespace BOOKLY.Infrastructure.Persistence
                 await dbContext.ServiceTypes.AddAsync(
                     ServiceType.Create(seedItem.Name, colorHex: seedItem.ColorHex, iconKey: seedItem.IconKey),
                     ct);
+
                 changed = true;
             }
 
@@ -76,19 +78,26 @@ namespace BOOKLY.Infrastructure.Persistence
             BooklyDbContext dbContext,
             IPasswordHasher passwordHasher,
             IDateTimeProvider dateTimeProvider,
+            IConfiguration configuration,
             CancellationToken ct)
         {
+            var adminEmail = configuration["Seed:AdminEmail"];
+            var adminPassword = configuration["Seed:AdminPassword"];
+
+            if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+                return;
+
             var adminExists = await dbContext.Users
                 .AsNoTracking()
-                .AnyAsync(user => user.Email.Value == InitialAdminEmail, ct);
+                .AnyAsync(user => user.Email.Value == adminEmail, ct);
 
             if (adminExists)
                 return;
 
             var admin = User.CreateAdmin(
                 PersonName.Create("Admin", "Bookly"),
-                DomainEmail.Create(InitialAdminEmail),
-                Password.FromHash(passwordHasher.Hash(InitialAdminPassword)),
+                DomainEmail.Create(adminEmail),
+                Password.FromHash(passwordHasher.Hash(adminPassword)),
                 dateTimeProvider.NowArgentina());
 
             await dbContext.Users.AddAsync(admin, ct);

@@ -126,36 +126,23 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
 
-            try
-            {
-                await _emailService.SendEmailConfirmation(
+            var emailDispatch = await TrySendCriticalEmail(
+                () => _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
                         rawToken,
                         (int)EmailConfirmationTtl.TotalHours),
-                    ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "No se pudo completar el registro porque fallo el envio del email de confirmacion a {RecipientEmail}.",
-                    user.Email.Value);
-
-                _userRepository.Remove(user);
-                await _unitOfWork.SaveChanges(ct);
-
-                return Result<RegisterOwnerResultDto>.Failure(
-                    Error.Validation("No pudimos completar el registro en este momento. Intenta nuevamente."));
-            }
+                    ct),
+                "confirmación de registro",
+                user.Email.Value,
+                "Cuenta creada correctamente. Revisa tu correo para confirmar tu cuenta.",
+                "Tu cuenta fue creada, pero no pudimos enviar el email de confirmacion. Podes reenviarlo desde la opcion \"Reenviar confirmacion\".");
 
             return Result<RegisterOwnerResultDto>.Success(
                 new RegisterOwnerResultDto(
                     await MapUserDtoAsync(user, ct),
-                    new EmailDispatchResultDto(
-                        true,
-                        "Cuenta creada correctamente. Revisa tu correo para confirmar tu cuenta.")));
+                    emailDispatch));
         }
 
         public async Task<Result> ConfirmEmail(ConfirmEmailDto dto, CancellationToken ct = default)
@@ -173,7 +160,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.ConfirmEmail();
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {
@@ -263,7 +250,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.SetPassword(Password.FromHash(_passwordHasher.Hash(dto.Password)));
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {
@@ -588,7 +575,7 @@ namespace BOOKLY.Application.Services.UserAggregate
                 userId,
                 purpose,
                 _tokenHashingService.HashToken(rawToken),
-                _dateTimeProvider.NowArgentina(),
+                _dateTimeProvider.UtcNow(),
                 ttl);
 
             await _userTokenRepository.AddOne(token, ct);
@@ -614,7 +601,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return (Result.Failure(Error.NotFound("Usuario")), null, null);
 
-            if (token.IsExpired(_dateTimeProvider.NowArgentina()))
+            if (token.IsExpired(_dateTimeProvider.UtcNow()))
                 return (Result.Failure(Error.Validation($"El token de {tokenLabel} está vencido")), token, user);
 
             if (token.IsUsed && expectedPurpose != UserTokenPurpose.EmailConfirmation)
@@ -655,7 +642,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             try
             {
                 user.AcceptInvitation(Password.FromHash(_passwordHasher.Hash(password)));
-                token.MarkAsUsed(_dateTimeProvider.NowArgentina());
+                token.MarkAsUsed(_dateTimeProvider.UtcNow());
             }
             catch (DomainException ex)
             {

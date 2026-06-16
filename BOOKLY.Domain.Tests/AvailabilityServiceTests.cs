@@ -19,7 +19,7 @@ public sealed class AvailabilityServiceTests
         var service = CreateServiceWithSchedules(date, 9, 12, 60);
 
         service.AddUnavailability(
-            DateRange.Create(date, date),
+            DateRange.Create(date, date, DateOnly.FromDateTime(ReferenceNow)),
             TimeRange.Create(new TimeOnly(10, 0), new TimeOnly(11, 0)),
             "Bloqueo parcial");
 
@@ -51,7 +51,7 @@ public sealed class AvailabilityServiceTests
         var service = CreateServiceWithSchedules(firstDate, 9, 10, 60, secondDate);
 
         service.AddUnavailability(
-            DateRange.Create(firstDate, firstDate),
+            DateRange.Create(firstDate, firstDate, DateOnly.FromDateTime(ReferenceNow)),
             null,
             "Dia completo bloqueado");
 

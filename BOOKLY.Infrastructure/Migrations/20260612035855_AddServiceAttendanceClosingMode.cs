@@ -5,25 +5,25 @@
 namespace BOOKLY.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class AddServiceSecretaryPermissionStorage : Migration
+    public partial class AddServiceAttendanceClosingMode : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "permissions",
-                table: "service_secretaries",
-                type: "nvarchar(max)",
+            migrationBuilder.AddColumn<int>(
+                name: "attendance_closing_mode",
+                table: "services",
+                type: "integer",
                 nullable: false,
-                defaultValue: "[]");
+                defaultValue: 1);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "permissions",
-                table: "service_secretaries");
+                name: "attendance_closing_mode",
+                table: "services");
         }
     }
 }

@@ -245,6 +245,19 @@ namespace BOOKLY.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
+        public async Task<List<Appointment>> GetExpiredPendingByServices(
+            IReadOnlyCollection<int> serviceIds,
+            DateTime startOfToday,
+            CancellationToken ct = default)
+        {
+            return await dbContext.Appointments
+                .Where(a => serviceIds.Contains(a.ServiceId)
+                         && a.Status == AppointmentStatus.Pending
+                         && a.StartDateTime < startOfToday)
+                .OrderBy(a => a.StartDateTime)
+                .ToListAsync(ct);
+        }
+
         private IQueryable<Appointment> BuildMetricsQuery(
             IReadOnlyCollection<int> serviceIds,
             DateOnly from,

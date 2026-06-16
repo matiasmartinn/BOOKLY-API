@@ -142,7 +142,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
                     (ServiceFieldType)dto.FieldType,
                     dto.IsRequired,
                     dto.SortOrder,
-                    _dateTimeProvider.UtcNow(),
+                    _dateTimeProvider.NowArgentina(),
                     dto.Description);
             }
             catch (DomainException ex)
@@ -243,7 +243,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
             try
             {
-                serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+                serviceType.AddOptionToField(fieldId, dto.Value, dto.Label, dto.SortOrder, _dateTimeProvider.NowArgentina());
             }
             catch (DomainException ex)
             {
@@ -264,7 +264,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
             try
             {
-                serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder, _dateTimeProvider.UtcNow());
+                serviceType.UpdateOption(fieldId, optionId, dto.Label, dto.SortOrder, _dateTimeProvider.NowArgentina());
             }
             catch (DomainException ex)
             {
@@ -306,7 +306,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
             try
             {
-                serviceType.DeactivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+                serviceType.DeactivateOption(fieldId, optionId, _dateTimeProvider.NowArgentina());
             }
             catch (DomainException ex)
             {
@@ -327,7 +327,7 @@ namespace BOOKLY.Application.Services.ServiceTypeAggregate
 
             try
             {
-                serviceType.ActivateOption(fieldId, optionId, _dateTimeProvider.UtcNow());
+                serviceType.ActivateOption(fieldId, optionId, _dateTimeProvider.NowArgentina());
             }
             catch (DomainException ex)
             {

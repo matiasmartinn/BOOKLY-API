@@ -217,6 +217,11 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 {
                     service.ChangePrice(dto.Price);
                 }
+
+                if (dto.AttendanceClosingMode != null)
+                {
+                    service.UpdateAttendanceClosingMode((AttendanceClosingMode)dto.AttendanceClosingMode.Value);
+                }
             }
             catch (DomainException ex)
             {
@@ -844,22 +849,6 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 return Result.Failure(Error.Conflict(ActiveServiceLimitReachedMessage));
             }
         }
-
-        private static Result EnsureExtraFieldsAllowed(Subscription subscription, ServiceType serviceType)
-        {
-            try
-            {
-                if (serviceType.HasActiveFields())
-                    subscription.EnsureCanUseExtraFields();
-
-                return Result.Success();
-            }
-            catch (DomainException ex)
-            {
-                return Result.Failure(Error.Validation(ex.Message));
-            }
-        }
-
         private string BuildPublicBookingUrl(Service service)
         {
             var baseUrl = (_frontendOptions.BaseUrl ?? string.Empty).TrimEnd('/');

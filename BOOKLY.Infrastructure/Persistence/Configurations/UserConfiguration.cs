@@ -60,11 +60,12 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedAt)
                    .HasColumnName("created_at")
-                   .HasDefaultValueSql("GETDATE()")
+                   .HasColumnType("timestamp without time zone")
                    .IsRequired();
 
             builder.Property(x => x.LastLoginAt)
-                   .HasColumnName("last_login_at");
+                   .HasColumnName("last_login_at")
+                   .HasColumnType("timestamp without time zone");
 
             builder.OwnsOne(x => x.Email, email =>
             {

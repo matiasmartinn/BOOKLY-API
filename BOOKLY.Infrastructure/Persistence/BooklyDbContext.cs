@@ -9,16 +9,18 @@ using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace BOOKLY.Infrastructure.Persistence
 {
     public sealed class BooklyDbContext : DbContext, IUnitOfWork
     {
         private readonly IDomainEventDispatcher _dispatcher;
-        public BooklyDbContext(DbContextOptions<BooklyDbContext> options, IDomainEventDispatcher domainEventDispatcher) : base(options) {
-        _dispatcher = domainEventDispatcher;
+
+        public BooklyDbContext(DbContextOptions<BooklyDbContext> options, IDomainEventDispatcher domainEventDispatcher) : base(options)
+        {
+            _dispatcher = domainEventDispatcher;
         }
 
         public DbSet<Service> Services => Set<Service>();
@@ -81,16 +83,17 @@ namespace BOOKLY.Infrastructure.Persistence
             {
                 return await base.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx)
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException postgresEx)
             {
-                throw sqlEx.Number switch
+                throw postgresEx.SqlState switch
                 {
-                    2627 or 2601 => new ConflictException("Ya existe un registro con esos datos únicos."),
-                    547 => new ConflictException("Violación de integridad referencial."),
-                    _ => new InvalidOperationException($"Error de base de datos ({sqlEx.Number}).", ex)
+                    PostgresErrorCodes.UniqueViolation => new ConflictException("Ya existe un registro con esos datos únicos."),
+                    PostgresErrorCodes.ForeignKeyViolation => new ConflictException("Violación de integridad referencial."),
+                    _ => new InvalidOperationException($"Error de base de datos ({postgresEx.SqlState}).", ex)
                 };
             }
         }
+
         public Task<int> SaveChanges(CancellationToken cancellationToken = default)
             => SaveChangesAsync(cancellationToken);
         protected override void OnModelCreating(ModelBuilder modelBuilder)

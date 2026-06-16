@@ -5,12 +5,14 @@ using BOOKLY.Application.Services.AuthAggregate.DTOs;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace BOOKLY.Api.Controllers
 {
     [ApiController]
     [Route("api/auth")]
+    [EnableRateLimiting("auth-policy")]
     public class AuthController : BaseController
     {
         private readonly IAuthService _authService;
@@ -59,7 +61,7 @@ namespace BOOKLY.Api.Controllers
             }
 
             return HandleAuthResult(result);
-        }
+        }   
 
         [AllowAnonymous]
         [HttpPost("logout")]

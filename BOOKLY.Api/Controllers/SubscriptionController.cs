@@ -125,9 +125,9 @@ namespace BOOKLY.Api.Controllers
 
         private async Task<Result> EnsureOwnerRouteAccess(int ownerId, CancellationToken ct)
         {
-            var ownerAccess = EnsureOwnerAccess(ownerId);
-            if (ownerAccess.IsFailure)
-                return ownerAccess;
+            var resolvedOwnerId = ResolveOwnerId(ownerId);
+            if (resolvedOwnerId.IsFailure)
+                return Result.Failure(resolvedOwnerId.Error);
 
             var userResult = await _userService.GetUserById(ownerId, ct);
             if (userResult.IsFailure)

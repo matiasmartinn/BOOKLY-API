@@ -26,10 +26,12 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(a => a.StartDateTime)
                 .HasColumnName("start_date_time")
+                .HasColumnType("timestamp without time zone")
                 .IsRequired();
 
             builder.Property(a => a.EndDateTime)
                 .HasColumnName("end_date_time")
+                .HasColumnType("timestamp without time zone")
                 .IsRequired();
 
             builder.Property(a => a.Status)
@@ -47,14 +49,17 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
                 .HasMaxLength(1000);
 
             builder.Property(a => a.CancelledOn)
-                .HasColumnName("cancelled_on");
+                .HasColumnName("cancelled_on")
+                .HasColumnType("timestamp without time zone");
 
             builder.Property(a => a.CreatedOn)
                 .HasColumnName("created_on")
+                .HasColumnType("timestamp without time zone")
                 .IsRequired();
 
             builder.Property(a => a.UpdateOn)
-                .HasColumnName("updated_on");
+                .HasColumnName("updated_on")
+                .HasColumnType("timestamp without time zone");
 
             builder.Property(a => a.UpdateBy)
                 .HasColumnName("updated_by");

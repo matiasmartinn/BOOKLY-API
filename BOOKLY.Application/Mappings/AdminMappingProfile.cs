@@ -50,7 +50,8 @@ namespace BOOKLY.Application.Mappings
             return context.Items.TryGetValue(TodayContextKey, out var today) &&
                    today is DateOnly value
                 ? value
-                : DateOnly.FromDateTime(DateTime.UtcNow);
+                : throw new InvalidOperationException(
+                    $"Debe proveerse '{TodayContextKey}' desde un servicio que use IDateTimeProvider.");
         }
 
         private static string BuildFullName(string firstName, string lastName)

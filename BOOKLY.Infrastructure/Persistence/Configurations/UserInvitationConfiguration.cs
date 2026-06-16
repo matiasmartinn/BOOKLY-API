@@ -33,14 +33,17 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedOn)
                    .HasColumnName("created_on")
+                   .HasColumnType("timestamp with time zone")
                    .IsRequired();
 
             builder.Property(x => x.ExpiresOn)
                    .HasColumnName("expires_on")
+                   .HasColumnType("timestamp with time zone")
                    .IsRequired();
 
             builder.Property(x => x.UsedOn)
-                   .HasColumnName("used_on");
+                   .HasColumnName("used_on")
+                   .HasColumnType("timestamp with time zone");
 
             builder.HasOne<User>()
                    .WithMany()

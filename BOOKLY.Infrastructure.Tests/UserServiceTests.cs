@@ -80,7 +80,7 @@ public sealed class UserServiceTests
         public Task<User?> GetByEmail(string email, CancellationToken ct = default)
             => Task.FromResult<User?>(string.Equals(email, user.Email.Value, StringComparison.OrdinalIgnoreCase) ? user : null);
 
-        public Task<RefreshToken?> GetRefreshToken(string tokenHash, string? legacyRawToken = null, CancellationToken ct = default)
+        public Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default)
             => Task.FromResult<RefreshToken?>(null);
 
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default)

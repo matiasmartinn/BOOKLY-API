@@ -27,6 +27,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.ExpiresAt)
                 .HasColumnName("expires_at")
+                .HasColumnType("timestamp with time zone")
                 .IsRequired();
 
             builder.Property(x => x.IsRevoked)
@@ -36,6 +37,7 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
 
             builder.Property(x => x.CreatedAt)
                 .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
                 .IsRequired();
 
             builder.HasOne<User>()

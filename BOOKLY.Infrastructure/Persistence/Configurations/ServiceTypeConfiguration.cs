@@ -50,13 +50,6 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             // FieldDefinitions (backing field)
             builder.Navigation(x => x.FieldDefinitions)
                 .UsePropertyAccessMode(PropertyAccessMode.Field);
-
-            // Seed inicial (opcional)
-            builder.HasData(
-                new { Id = 1, Name = "Consulta", Description = "Consulta médica", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true },
-                new { Id = 2, Name = "Tratamiento", Description = "Sesión de tratamiento", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true },
-                new { Id = 3, Name = "Seguimiento", Description = "Consulta de seguimiento", ColorHex = ServiceType.DefaultColorHex, IconKey = (string?)null, IsActive = true }
-            );
         }
     }
 }

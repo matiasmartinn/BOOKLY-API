@@ -2,8 +2,6 @@ using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Security;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using Microsoft.AspNetCore.Mvc;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
 namespace BOOKLY.Api.Controllers
 {
@@ -58,52 +56,22 @@ namespace BOOKLY.Api.Controllers
             return MapError(result.Error!);
         }
 
-        protected Result<int> GetAuthenticatedUserId()
-        {
-            var rawUserId =
-                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ??
-                User.FindFirstValue(ClaimTypes.NameIdentifier);
+        protected ICurrentUserContext CurrentUser =>
+            HttpContext.RequestServices.GetRequiredService<ICurrentUserContext>();
 
-            if (!int.TryParse(rawUserId, out var userId) || userId <= 0)
-                return Result<int>.Failure(Error.Unauthorized("El token no contiene un usuario válido."));
+        protected Result<int> GetAuthenticatedUserId() => CurrentUser.GetUserId();
 
-            return Result<int>.Success(userId);
-        }
+        protected Result<UserRole> GetAuthenticatedUserRole() => CurrentUser.GetRole();
 
-        protected Result<UserRole> GetAuthenticatedUserRole()
-        {
-            var role = User.FindFirstValue(ClaimTypes.Role);
-
-            return role switch
-            {
-                Roles.Admin => Result<UserRole>.Success(UserRole.Admin),
-                Roles.Owner => Result<UserRole>.Success(UserRole.Owner),
-                Roles.Secretary => Result<UserRole>.Success(UserRole.Secretary),
-                _ => Result<UserRole>.Failure(Error.Unauthorized("El token no contiene un rol válido."))
-            };
-        }
-
-        protected Result EnsureOwnerAccess(int ownerId)
-        {
-            var userIdResult = GetAuthenticatedUserId();
-            if (userIdResult.IsFailure)
-                return Result.Failure(userIdResult.Error);
-
-            if (User.IsInRole(Roles.Admin))
-                return Result.Success();
-
-            return User.IsInRole(Roles.Owner) && userIdResult.Data == ownerId
-                ? Result.Success()
-                : Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este owner."));
-        }
+        protected Result<int> ResolveOwnerId(int? ownerId = null) => CurrentUser.ResolveOwnerId(ownerId);
 
         protected Result EnsureSelfOrAdmin(int userId)
         {
-            var currentUserIdResult = GetAuthenticatedUserId();
+            var currentUserIdResult = CurrentUser.GetUserId();
             if (currentUserIdResult.IsFailure)
                 return Result.Failure(currentUserIdResult.Error);
 
-            if (User.IsInRole(Roles.Admin) || currentUserIdResult.Data == userId)
+            if (CurrentUser.IsAdmin || currentUserIdResult.Data == userId)
                 return Result.Success();
 
             return Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario."));
@@ -162,6 +130,13 @@ namespace BOOKLY.Api.Controllers
                     title: "Error inesperado",
                     statusCode: StatusCodes.Status500InternalServerError,
                     detail: "Ocurrió un error inesperado.",
+                    instance: instance),
+
+                ErrorType.RateLimitExceeded => Problem(
+                     type: "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+                    title: "Demasiadas solicitudes",
+                    statusCode: StatusCodes.Status429TooManyRequests,
+                    detail: error.Message,
                     instance: instance),
 
                 _ => Problem(
