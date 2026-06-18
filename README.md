@@ -171,3 +171,7 @@ Proyecto de tesis entregado y actualmente en etapa final de evaluación/rendida.
 ## Autor
 
 Matias Martin
+
+## Frontend
+
+github.com/matiasmartinn/BOOKLY-WEB
