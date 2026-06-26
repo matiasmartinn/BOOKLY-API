@@ -3,6 +3,7 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
@@ -95,12 +96,13 @@ public sealed class AppointmentSearchCreatedByTests
             appointmentRepository,
             new FakeServiceRepository(service),
             new FakeServiceTypeRepository(),
-            new FakeSubscriptionRepository(),
             new FakeUserRepository(),
             historyRepository,
             new AvailabilityService(),
             new FakeEmailService(),
             new FakeAppointmentCancellationNotificationService(),
+            new EffectiveSubscriptionResolver(new FakeSubscriptionRepository(), new StubDateTimeProvider()),
+            new AppointmentValidator(),
             CreateMapper(),
             new FakeUnitOfWork(),
             new StubDateTimeProvider(),
@@ -325,6 +327,7 @@ public sealed class AppointmentSearchCreatedByTests
     {
         public Task<User?> GetOne(int id, CancellationToken ct = default) => Task.FromResult<User?>(null);
         public Task<User?> GetById(int id, CancellationToken ct = default) => GetOne(id, ct);
+        public Task<IReadOnlyCollection<User>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<User>>([]);
         public Task<User?> GetByEmail(string email, CancellationToken ct = default) => Task.FromResult<User?>(null);
         public Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default) => Task.FromResult(false);

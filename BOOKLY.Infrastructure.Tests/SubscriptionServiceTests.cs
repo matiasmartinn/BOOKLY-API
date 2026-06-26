@@ -32,7 +32,7 @@ public sealed class SubscriptionServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(new DateOnly(2026, 3, 31), result.Data!.StartDate);
-        Assert.Equal(new DateOnly(2026, 4, 30), result.Data.EndDate);
+        Assert.Equal(new DateOnly(2026, 4, 29), result.Data.EndDate);
         Assert.Equal(SubscriptionStatus.Active, repository.Subscription!.Status);
         Assert.True(repository.WasUpdated);
     }
@@ -54,7 +54,7 @@ public sealed class SubscriptionServiceTests
         Assert.NotNull(result.Data);
         Assert.Equal(PlanName.Pro, repository.Subscription!.Plan.Name);
         Assert.Equal(new DateOnly(2026, 3, 31), repository.Subscription.Period.StartDate);
-        Assert.Equal(new DateOnly(2026, 4, 30), repository.Subscription.Period.EndDate);
+        Assert.Equal(new DateOnly(2026, 4, 29), repository.Subscription.Period.EndDate);
         Assert.True(repository.WasUpdated);
     }
 
@@ -83,7 +83,7 @@ public sealed class SubscriptionServiceTests
         Assert.Equal(PlanName.Max, repository.Subscription!.Plan.Name);
         Assert.Equal(SubscriptionStatus.Active, repository.Subscription.Status);
         Assert.Equal(new DateOnly(2026, 3, 31), repository.Subscription.Period.StartDate);
-        Assert.Equal(new DateOnly(2026, 4, 30), repository.Subscription.Period.EndDate);
+        Assert.Equal(new DateOnly(2026, 4, 29), repository.Subscription.Period.EndDate);
         Assert.True(repository.WasUpdated);
     }
 

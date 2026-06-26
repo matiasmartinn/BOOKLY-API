@@ -3,9 +3,9 @@ using BOOKLY.Application.Common;
 using BOOKLY.Application.EventHandler;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;
-using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.ServiceAggregate;
 using BOOKLY.Application.Services.ServiceAggregate.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
@@ -17,7 +17,6 @@ using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
-using BOOKLY.Infrastructure.Email;
 using BOOKLY.Infrastructure.Persistence;
 using BOOKLY.Infrastructure.Persistence.Repositories;
 using BOOKLY.Infrastructure.Repositories;
@@ -191,16 +190,20 @@ public sealed class ServiceUnavailabilityCancellationTests
         BooklyDbContext context,
         IAppointmentCancellationNotificationService notificationService)
     {
+        var subscriptionRepository = new SubscriptionRepository(context);
+        var dateTimeProvider = new FakeDateTimeProvider();
+
         return new ServiceApplicationService(
             new ServiceRepository(context),
             new AppointmentRepository(context),
             new AvailabilityService(),
             new UserRepository(context),
             new ServiceTypeRepository(context),
-            new SubscriptionRepository(context),
-            new FakeDateTimeProvider(),
+            subscriptionRepository,
+            dateTimeProvider,
             new ServiceAuthorizationService(),
             notificationService,
+            new EffectiveSubscriptionResolver(subscriptionRepository, dateTimeProvider),
             new MapperConfiguration(_ => { }).CreateMapper(),
             context,
             Options.Create(new FrontendOptions()));

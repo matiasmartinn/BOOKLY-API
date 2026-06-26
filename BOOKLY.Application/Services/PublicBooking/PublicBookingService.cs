@@ -2,11 +2,11 @@ using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.PublicBooking.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
-using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.DomainServices;
+using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Repositories;
 
 namespace BOOKLY.Application.Services.PublicBooking
@@ -24,6 +24,7 @@ namespace BOOKLY.Application.Services.PublicBooking
         private readonly IAppointmentRepository _appointmentRepository;
         private readonly IAppointmentService _appointmentService;
         private readonly IAvailabilityService _availabilityService;
+        private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
         private readonly IDateTimeProvider _dateTimeProvider;
 
         public PublicBookingService(
@@ -34,6 +35,7 @@ namespace BOOKLY.Application.Services.PublicBooking
             IAppointmentRepository appointmentRepository,
             IAppointmentService appointmentService,
             IAvailabilityService availabilityService,
+            IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
             IDateTimeProvider dateTimeProvider)
         {
             _serviceRepository = serviceRepository;
@@ -43,6 +45,7 @@ namespace BOOKLY.Application.Services.PublicBooking
             _appointmentRepository = appointmentRepository;
             _appointmentService = appointmentService;
             _availabilityService = availabilityService;
+            _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
             _dateTimeProvider = dateTimeProvider;
         }
 
@@ -58,7 +61,7 @@ namespace BOOKLY.Application.Services.PublicBooking
                 return Result<PublicServiceBookingDto>.Failure(Error.NotFound("TipoServicio"));
 
             var owner = await _userRepository.GetOne(service.OwnerId, ct);
-            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
+            var subscription = await _effectiveSubscriptionResolver.Resolve(service.OwnerId, ct);
 
             return Result<PublicServiceBookingDto>.Success(
                 MapPublicService(
@@ -220,17 +223,6 @@ namespace BOOKLY.Application.Services.PublicBooking
                     })
                     .ToList()
             };
-        }
-
-        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
-        {
-            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
-            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
-
-            if (subscription == null || !subscription.IsActive(today))
-                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
-
-            return subscription;
         }
     }
 }

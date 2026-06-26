@@ -1,26 +1,26 @@
-using BOOKLY.Application.Services.ServiceAggregate.DTOs;
-using BOOKLY.Domain.Aggregates.ServiceAggregate;
-using BOOKLY.Domain.Interfaces;
-using BOOKLY.Application.Common.Models;
-using AutoMapper;
-using BOOKLY.Application.Interfaces;
-using BOOKLY.Domain.SharedKernel;
-using BOOKLY.Application.Common;
-using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
-using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
-using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
-using BOOKLY.Domain.Aggregates.AppointmentAggregate;
-using BOOKLY.Domain.DomainServices;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
-using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
-using BOOKLY.Domain.Exceptions;
-using BOOKLY.Domain.Repositories;
-using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
-using Microsoft.Extensions.Options;
+using AutoMapper;
+using BOOKLY.Application.Common;
+using BOOKLY.Application.Common.Models;
+using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services.ServiceAggregate.DTOs;
 using BOOKLY.Application.Services.ServiceTypeAggregate.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
+using BOOKLY.Domain.Aggregates.AppointmentAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
+using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
+using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
+using BOOKLY.Domain.DomainServices;
+using BOOKLY.Domain.Exceptions;
+using BOOKLY.Domain.Interfaces;
+using BOOKLY.Domain.Repositories;
+using BOOKLY.Domain.SharedKernel;
+using Microsoft.Extensions.Options;
 
 namespace BOOKLY.Application.Services.ServiceAggregate
 {
@@ -40,6 +40,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IServiceAuthorizationService _authorizationService;
         private readonly IAppointmentCancellationNotificationService _appointmentCancellationNotificationService;
+        private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
         private readonly FrontendOptions _frontendOptions;
@@ -54,6 +55,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             IDateTimeProvider dateTimeProvider,
             IServiceAuthorizationService authorizationService,
             IAppointmentCancellationNotificationService appointmentCancellationNotificationService,
+            IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
             IMapper mapper,
             IUnitOfWork unitOfWork,
             IOptions<FrontendOptions> frontendOptions
@@ -68,6 +70,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             _dateTimeProvider = dateTimeProvider;
             _authorizationService = authorizationService;
             _appointmentCancellationNotificationService = appointmentCancellationNotificationService;
+            _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
             _frontendOptions = frontendOptions.Value;
@@ -113,7 +116,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             if (serviceType == null)
                 return Result<ServiceDto>.Failure(Error.NotFound("TipoServicio"));
 
-            var subscription = await GetEffectiveSubscription(dto.OwnerId, ct);
+            var subscription = await _effectiveSubscriptionResolver.Resolve(dto.OwnerId, ct);
             var activeServiceLimitValidation = await ValidateCanAddActiveService(dto.OwnerId, subscription, ct);
             if (activeServiceLimitValidation.IsFailure)
                 return Result<ServiceDto>.Failure(activeServiceLimitValidation.Error);
@@ -779,22 +782,10 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 
             return candidate;
         }
-
-        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
-        {
-            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
-            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
-
-            if (subscription == null || !subscription.IsActive(today))
-                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
-
-            return subscription;
-        }
-
         private async Task<ServiceDto> BuildServiceDto(Service service, CancellationToken ct)
         {
             var serviceType = await _serviceTypeRepository.GetByIdWithFields(service.ServiceTypeId, ct);
-            var subscription = await GetEffectiveSubscription(service.OwnerId, ct);
+            var subscription = await _effectiveSubscriptionResolver.Resolve(service.OwnerId, ct);
             var orderedFields = serviceType?.FieldDefinitions
                 .OrderBy(field => field.SortOrder)
                 .ThenBy(field => field.Id)
@@ -824,7 +815,7 @@ namespace BOOKLY.Application.Services.ServiceAggregate
 
         private async Task<Result> ValidateCanAddActiveService(int ownerId, CancellationToken ct)
         {
-            var subscription = await GetEffectiveSubscription(ownerId, ct);
+            var subscription = await _effectiveSubscriptionResolver.Resolve(ownerId, ct);
             return await ValidateCanAddActiveService(ownerId, subscription, ct);
         }
 

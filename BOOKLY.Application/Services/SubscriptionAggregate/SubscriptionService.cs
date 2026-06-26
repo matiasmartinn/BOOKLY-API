@@ -209,7 +209,6 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
         }
-
         private async Task<(int Services, int Secretaries)> GetOwnerCounts(int ownerId, CancellationToken ct)
         {
             var currentServices = await _serviceRepository.CountActiveByOwnerId(ownerId, ct);

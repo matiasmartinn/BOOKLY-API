@@ -10,7 +10,7 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
 
         // EF Core ctor
         private SubscriptionPeriod() { }
-        
+
         private SubscriptionPeriod(DateOnly start, DateOnly? end)
         {
             StartDate = start;
@@ -27,7 +27,7 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
 
         public static SubscriptionPeriod CreateMonthly(DateOnly start)
         {
-            return Create(start, start.AddMonths(1));
+            return Create(start, start.AddMonths(1).AddDays(-1));
         }
 
         public static SubscriptionPeriod OpenEnded(DateOnly start)

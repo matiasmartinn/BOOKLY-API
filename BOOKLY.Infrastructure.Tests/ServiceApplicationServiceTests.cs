@@ -5,6 +5,7 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.ServiceAggregate;
 using BOOKLY.Application.Services.ServiceAggregate.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
@@ -354,6 +355,7 @@ public sealed class ServiceApplicationServiceTests
             new StubDateTimeProvider(),
             new ServiceAuthorizationService(),
             new FakeAppointmentCancellationNotificationService(),
+            new EffectiveSubscriptionResolver(subscriptionRepository, new StubDateTimeProvider()),
             CreateMapper(),
             new FakeUnitOfWork(),
             Options.Create(new FrontendOptions()));
@@ -441,6 +443,9 @@ public sealed class ServiceApplicationServiceTests
 
         public Task<User?> GetById(int id, CancellationToken ct = default)
             => GetOne(id, ct);
+
+        public Task<IReadOnlyCollection<User>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyCollection<User>>(ids.Contains(owner.Id) ? [owner] : []);
 
         public Task<User?> GetByEmail(string email, CancellationToken ct = default) => Task.FromResult<User?>(null);
         public Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);

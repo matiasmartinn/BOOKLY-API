@@ -3,24 +3,18 @@ using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
+using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
-using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
-using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Entities;
-using BOOKLY.Domain.Aggregates.ServiceTypeAggregate.Enum;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
-using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
-using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.Extensions.Logging;
-using System.Globalization;
 
 namespace BOOKLY.Application.Services.AppointmentAggregate
 {
@@ -29,12 +23,13 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IAppointmentRepository _repository;
         private readonly IServiceRepository _serviceRepository;
         private readonly IServiceTypeRepository _serviceTypeRepository;
-        private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAppointmentHistoryRepository _historyRepository;
         private readonly IAvailabilityService _availabilityService;
         private readonly IEmailService _emailService;
         private readonly IAppointmentCancellationNotificationService _appointmentCancellationNotificationService;
+        private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
+        private readonly IAppointmentValidator _appointmentValidator;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AppointmentService> _logger;
@@ -44,12 +39,13 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IAppointmentRepository repository,
             IServiceRepository serviceRepository,
             IServiceTypeRepository serviceTypeRepository,
-            ISubscriptionRepository subscriptionRepository,
             IUserRepository userRepository,
             IAppointmentHistoryRepository historyRepository,
             IAvailabilityService availabilityService,
             IEmailService emailService,
             IAppointmentCancellationNotificationService appointmentCancellationNotificationService,
+            IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
+            IAppointmentValidator appointmentValidator,
             IMapper mapper,
             IUnitOfWork unitOfWork,
             IDateTimeProvider dateTimeProvider,
@@ -58,12 +54,13 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _repository = repository;
             _serviceRepository = serviceRepository;
             _serviceTypeRepository = serviceTypeRepository;
-            _subscriptionRepository = subscriptionRepository;
             _userRepository = userRepository;
             _historyRepository = historyRepository;
             _availabilityService = availabilityService;
             _emailService = emailService;
             _appointmentCancellationNotificationService = appointmentCancellationNotificationService;
+            _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
+            _appointmentValidator = appointmentValidator;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
             _logger = logger;
@@ -217,7 +214,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             if (canUseExtraFields)
             {
-                var fieldValidation = ValidateFieldValues(dto.FieldValues, serviceType);
+                var fieldValidation = _appointmentValidator.Validate(dto.FieldValues, serviceType);
                 if (fieldValidation.IsFailure)
                     return Result<AppointmentDto>.Failure(fieldValidation.Error!);
             }
@@ -631,85 +628,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         }
 
         // Las notificaciones de email son complementarias y no deben revertir la operación principal.
-        private static Result ValidateFieldValues(
-            IReadOnlyCollection<CreateAppointmentFieldValueDto> fieldValues,
-            ServiceType serviceType)
-        {
-            var activeFields = serviceType.FieldDefinitions
-                .Where(field => field.IsActive)
-                .ToList();
-
-            if (fieldValues.GroupBy(field => field.FieldDefinitionId).Any(group => group.Count() > 1))
-                return Result.Failure(Error.Validation("No se puede informar más de un valor por cada campo adicional."));
-
-            if (activeFields.Count == 0)
-            {
-                if (fieldValues.Count > 0)
-                    return Result.Failure(Error.Validation("El servicio no admite campos adicionales."));
-
-                return Result.Success();
-            }
-
-            foreach (var fieldValue in fieldValues)
-            {
-                var field = activeFields.FirstOrDefault(definition => definition.Id == fieldValue.FieldDefinitionId);
-                if (field == null)
-                    return Result.Failure(Error.Validation("Uno o más campos enviados no pertenecen al tipo de servicio."));
-
-                if (string.IsNullOrWhiteSpace(fieldValue.Value))
-                    return Result.Failure(Error.Validation($"El campo '{field.Label.Value}' no puede estar vacío."));
-
-                if (!IsFieldValueValid(field, fieldValue.Value))
-                    return Result.Failure(Error.Validation(BuildInvalidFieldValueMessage(field)));
-            }
-
-            foreach (var requiredField in activeFields.Where(field => field.IsRequired))
-            {
-                var hasValue = fieldValues.Any(fieldValue =>
-                    fieldValue.FieldDefinitionId == requiredField.Id &&
-                    !string.IsNullOrWhiteSpace(fieldValue.Value));
-
-                if (!hasValue)
-                    return Result.Failure(Error.Validation($"El campo '{requiredField.Label.Value}' es obligatorio."));
-            }
-
-            return Result.Success();
-        }
-
-        private static bool IsFieldValueValid(ServiceTypeFieldDefinition field, string value)
-        {
-            var trimmedValue = value.Trim();
-
-            return field.FieldType switch
-            {
-                ServiceFieldType.Text => true,
-                ServiceFieldType.MultilineText => true,
-                ServiceFieldType.Number => decimal.TryParse(
-                    trimmedValue,
-                    NumberStyles.Number,
-                    CultureInfo.InvariantCulture,
-                    out _) || decimal.TryParse(trimmedValue, out _),
-                ServiceFieldType.Date => DateOnly.TryParse(trimmedValue, out _) || DateTime.TryParse(trimmedValue, out _),
-                ServiceFieldType.Select => field.Options.Any(option =>
-                    option.IsActive &&
-                    string.Equals(option.Value, trimmedValue, StringComparison.OrdinalIgnoreCase)),
-                ServiceFieldType.Checkbox => bool.TryParse(trimmedValue, out _),
-                _ => false
-            };
-        }
-
-        private static string BuildInvalidFieldValueMessage(ServiceTypeFieldDefinition field)
-        {
-            return field.FieldType switch
-            {
-                ServiceFieldType.Number => $"El campo '{field.Label.Value}' debe contener un número válido.",
-                ServiceFieldType.Date => $"El campo '{field.Label.Value}' debe contener una fecha válida.",
-                ServiceFieldType.Select => $"El campo '{field.Label.Value}' debe seleccionar una opción válida.",
-                ServiceFieldType.Checkbox => $"El campo '{field.Label.Value}' debe indicar true o false.",
-                _ => $"El campo '{field.Label.Value}' contiene un valor inválido."
-            };
-        }
-
         private async Task TrySendEmail(Func<Task> sendEmail, string purpose, string recipientEmail)
         {
             try
@@ -728,7 +646,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
         private async Task<Result> ValidateExtraFieldsAllowed(int ownerId, CancellationToken ct)
         {
-            var subscription = await GetEffectiveSubscription(ownerId, ct);
+            var subscription = await _effectiveSubscriptionResolver.Resolve(ownerId, ct);
 
             try
             {
@@ -739,17 +657,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             {
                 return Result.Failure(Error.Validation(ex.Message));
             }
-        }
-
-        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
-        {
-            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
-            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
-
-            if (subscription == null || !subscription.IsActive(today))
-                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
-
-            return subscription;
         }
     }
 }

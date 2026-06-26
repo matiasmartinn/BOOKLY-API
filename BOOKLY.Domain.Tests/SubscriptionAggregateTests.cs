@@ -99,12 +99,65 @@ public sealed class SubscriptionAggregateTests
     }
 
     [Fact]
-    public void CreateMonthly_ShouldUseTheSameMonthlyRuleAcrossTheDomain()
+    public void CreateMonthly_ShouldCreateInclusiveMonth_WhenStartIsFirstDay()
+    {
+        var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2026, 3, 1));
+
+        Assert.Equal(new DateOnly(2026, 3, 1), period.StartDate);
+        Assert.Equal(new DateOnly(2026, 3, 31), period.EndDate);
+        Assert.False(period.IsOpenEnded);
+    }
+
+    [Fact]
+    public void CreateMonthly_ShouldCreateInclusiveMonth_WhenStartIsMidMonth()
+    {
+        var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2026, 3, 15));
+
+        Assert.Equal(new DateOnly(2026, 3, 15), period.StartDate);
+        Assert.Equal(new DateOnly(2026, 4, 14), period.EndDate);
+        Assert.False(period.IsOpenEnded);
+    }
+
+    [Fact]
+    public void CreateMonthly_ShouldCreateInclusiveMonth_WhenStartIsDay31()
     {
         var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2026, 3, 31));
 
         Assert.Equal(new DateOnly(2026, 3, 31), period.StartDate);
-        Assert.Equal(new DateOnly(2026, 4, 30), period.EndDate);
+        Assert.Equal(new DateOnly(2026, 4, 29), period.EndDate);
         Assert.False(period.IsOpenEnded);
+    }
+
+    [Fact]
+    public void CreateMonthly_ShouldCreateInclusiveMonth_WhenFebruaryIsLeapYear()
+    {
+        var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2028, 2, 1));
+
+        Assert.Equal(new DateOnly(2028, 2, 1), period.StartDate);
+        Assert.Equal(new DateOnly(2028, 2, 29), period.EndDate);
+        Assert.False(period.IsOpenEnded);
+    }
+
+    [Fact]
+    public void IsActive_ShouldTreatEndDateAsInclusive()
+    {
+        var subscription = Subscription.CreatePaid(
+            1,
+            SubscriptionPlan.Pro(),
+            SubscriptionPeriod.Create(new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31)),
+            ReferenceNow);
+
+        Assert.True(subscription.IsActive(new DateOnly(2026, 3, 31)));
+        Assert.False(subscription.IsExpired(new DateOnly(2026, 3, 31)));
+        Assert.False(subscription.IsActive(new DateOnly(2026, 4, 1)));
+        Assert.True(subscription.IsExpired(new DateOnly(2026, 4, 1)));
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenEndDateIsBeforeStartDate()
+    {
+        var action = () => SubscriptionPeriod.Create(new DateOnly(2026, 4, 1), new DateOnly(2026, 3, 31));
+
+        Assert.Throws<DomainException>(action);
     }
 }

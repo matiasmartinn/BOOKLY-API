@@ -1,5 +1,5 @@
-using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.EventHandler;
+using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.AdminAggregate;
 using BOOKLY.Application.Services.AppointmentAggregate;
@@ -39,6 +39,8 @@ namespace BOOKLY.Application.DependencyInjection
             services.AddScoped<ISubscriptionService, SubscriptionService>();
             services.AddScoped<IServiceTypeService, ServiceTypeService>();
             services.AddScoped<IServiceAuthorizationService, ServiceAuthorizationService>();
+            services.AddScoped<IEffectiveSubscriptionResolver, EffectiveSubscriptionResolver>();
+            services.AddScoped<IAppointmentValidator, AppointmentValidator>();
             services.AddScoped<IDomainEventHandler<AppointmentCreatedEvent>, RecordAppointmentCreatedHandler>();
             services.AddScoped<IDomainEventHandler<AppointmentStatusChangedEvent>, RecordStatusChangedHandler>();
 
