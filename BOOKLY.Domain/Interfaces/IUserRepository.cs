@@ -7,6 +7,7 @@ namespace BOOKLY.Domain.Interfaces
     {
         Task<User?> GetOne(int id, CancellationToken ct = default);
         Task<User?> GetById(int id, CancellationToken ct = default);
+        Task<IReadOnlyCollection<User>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct = default);
         Task<User?> GetByEmail(string email, CancellationToken ct = default);
         Task<RefreshToken?> GetRefreshToken(string tokenHash, CancellationToken ct = default);
         Task<bool> ExistsByEmail(string email, CancellationToken ct = default);

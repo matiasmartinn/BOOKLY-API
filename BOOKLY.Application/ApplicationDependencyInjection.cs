@@ -11,6 +11,7 @@ using BOOKLY.Application.Services.ServiceAggregate;
 using BOOKLY.Application.Services.ServiceTypeAggregate;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Application.Services.UserAggregate;
+using BOOKLY.Application.Services.UserAggregate.SecretaryManagement;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Events;
 using BOOKLY.Domain.SharedKernel;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,7 @@ namespace BOOKLY.Application.DependencyInjection
             services.AddScoped<IPublicBookingService, PublicBookingService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<ISecretaryManagementService, SecretaryManagementService>();
             services.AddScoped<IAppointmentService, AppointmentService>();
             services.AddScoped<IAppointmentCancellationNotificationService, AppointmentCancellationNotificationService>();
             services.AddScoped<IClientService, ClientService>();

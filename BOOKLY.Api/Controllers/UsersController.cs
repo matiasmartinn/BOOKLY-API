@@ -3,6 +3,7 @@ using BOOKLY.Application.Common.Security;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
+using BOOKLY.Application.Services.UserAggregate.SecretaryManagement;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,10 +15,14 @@ namespace BOOKLY.Api.Controllers
     public class UsersController : BaseController
     {
         private readonly IUserService _userService;
+        private readonly ISecretaryManagementService _secretaryManagementService;
 
-        public UsersController(IUserService userService)
+        public UsersController(
+            IUserService userService,
+            ISecretaryManagementService secretaryManagementService)
         {
             _userService = userService;
+            _secretaryManagementService = secretaryManagementService;
         }
 
         [HttpGet("{id:int}")]
@@ -33,7 +38,7 @@ namespace BOOKLY.Api.Controllers
                 return HandleResult(await _userService.GetUserById(id, ct));
 
             if (User.IsInRole(Roles.Owner))
-                return HandleResult(await _userService.GetOwnerSecretaryById(currentUserId.Data, id, ct));
+                return HandleResult(await _secretaryManagementService.GetOwnerSecretaryById(currentUserId.Data, id, ct));
 
             return HandleResult(Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario.")));
         }
@@ -50,7 +55,7 @@ namespace BOOKLY.Api.Controllers
             if (resolvedOwnerId.IsFailure)
                 return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            var result = await _userService.CreateSecretary(resolvedOwnerId.Data, dto, ct);
+            var result = await _secretaryManagementService.CreateSecretary(resolvedOwnerId.Data, dto, ct);
             return HandleCreated(result, nameof(GetById), new { id = result.Data?.User.Id });
         }
 
@@ -64,7 +69,7 @@ namespace BOOKLY.Api.Controllers
             if (resolvedOwnerId.IsFailure)
                 return HandleResult(Result.Failure(resolvedOwnerId.Error));
 
-            return HandleResult(await _userService.GetSecretariesByOwner(resolvedOwnerId.Data, ct));
+            return HandleResult(await _secretaryManagementService.GetSecretariesByOwner(resolvedOwnerId.Data, ct));
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
@@ -84,7 +89,7 @@ namespace BOOKLY.Api.Controllers
                 ownerId = resolvedOwnerId.Data;
             }
 
-            return HandleResult(await _userService.ActivateSecretary(id, ownerId, ct));
+            return HandleResult(await _secretaryManagementService.ActivateSecretary(id, ownerId, ct));
         }
 
         [Authorize(Roles = Roles.Admin + "," + Roles.Owner)]
@@ -103,7 +108,7 @@ namespace BOOKLY.Api.Controllers
                 ownerId = resolvedOwnerId.Data;
             }
 
-            return HandleResult(await _userService.DeactivateSecretary(id, ownerId, ct));
+            return HandleResult(await _secretaryManagementService.DeactivateSecretary(id, ownerId, ct));
         }
 
         [HttpPut("{id:int}")]
@@ -120,7 +125,7 @@ namespace BOOKLY.Api.Controllers
                 return HandleResult(await _userService.UpdateUser(id, dto, ct));
 
             if (User.IsInRole(Roles.Owner))
-                return HandleResult(await _userService.UpdateOwnerSecretary(currentUserId.Data, id, dto, ct));
+                return HandleResult(await _secretaryManagementService.UpdateOwnerSecretary(currentUserId.Data, id, dto, ct));
 
             return HandleResult(Result.Failure(Error.Forbidden("No tienes permisos para operar sobre este usuario.")));
         }

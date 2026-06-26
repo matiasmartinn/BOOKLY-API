@@ -5,7 +5,6 @@ using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Interfaces;
@@ -51,7 +50,6 @@ public sealed class UserServiceTests
         return new UserService(
             new FakeUserRepository(user),
             new FakeServiceRepository(),
-            new FakeSubscriptionRepository(),
             unitOfWork,
             new FakePasswordHasher(),
             new FakeTokenHashingService(),
@@ -76,6 +74,9 @@ public sealed class UserServiceTests
 
         public Task<User?> GetById(int id, CancellationToken ct = default)
             => GetOne(id, ct);
+
+        public Task<IReadOnlyCollection<User>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyCollection<User>>(ids.Contains(user.Id) ? [user] : []);
 
         public Task<User?> GetByEmail(string email, CancellationToken ct = default)
             => Task.FromResult<User?>(string.Equals(email, user.Email.Value, StringComparison.OrdinalIgnoreCase) ? user : null);
@@ -119,14 +120,6 @@ public sealed class UserServiceTests
         public Task AddOne(Service service, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(Service service) => throw new NotImplementedException();
         public void Remove(Service service) => throw new NotImplementedException();
-    }
-
-    private sealed class FakeSubscriptionRepository : ISubscriptionRepository
-    {
-        public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task AddOne(Subscription subscription, CancellationToken ct = default) => throw new NotImplementedException();
-        public void Update(Subscription subscription) => throw new NotImplementedException();
     }
 
     private sealed class FakeUnitOfWork : IUnitOfWork
@@ -182,7 +175,6 @@ public sealed class UserServiceTests
     private sealed class StubDateTimeProvider : IDateTimeProvider
     {
         public DateTime NowArgentina() => ReferenceNow;
-
         public DateTime UtcNow() => ReferenceNow.ToUniversalTime();
     }
 }

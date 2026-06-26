@@ -5,7 +5,6 @@ using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
-using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
@@ -26,7 +25,6 @@ namespace BOOKLY.Application.Services.UserAggregate
 
         private readonly IUserRepository _userRepository;
         private readonly IServiceRepository _serviceRepository;
-        private readonly ISubscriptionRepository _subscriptionRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IUserTokenRepository _userTokenRepository;
@@ -40,7 +38,6 @@ namespace BOOKLY.Application.Services.UserAggregate
         public UserService(
             IUserRepository userRepository,
             IServiceRepository serviceRepository,
-            ISubscriptionRepository subscriptionRepository,
             IUnitOfWork unitOfWork,
             IPasswordHasher passwordHasher,
             ITokenHashingService tokenHashingService,
@@ -53,7 +50,6 @@ namespace BOOKLY.Application.Services.UserAggregate
         {
             _userRepository = userRepository;
             _serviceRepository = serviceRepository;
-            _subscriptionRepository = subscriptionRepository;
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
             _tokenHashingService = tokenHashingService;
@@ -307,151 +303,11 @@ namespace BOOKLY.Application.Services.UserAggregate
                     emailDispatch));
         }
 
-        public async Task<Result<UserEmailDispatchResultDto>> CreateSecretary(int ownerId, CreateSecretaryDto dto, CancellationToken ct = default)
-        {
-            var service = await _serviceRepository.GetOne(dto.ServiceId, ct);
-            if (service is null)
-                return Result<UserEmailDispatchResultDto>.Failure(Error.NotFound("Service"));
-
-            if (service.OwnerId != ownerId)
-                return Result<UserEmailDispatchResultDto>.Failure(Error.Validation("El servicio no pertenece al owner"));
-
-            if (await _userRepository.ExistsByEmail(dto.Email, ct))
-                return Result<UserEmailDispatchResultDto>.Failure(Error.Conflict("Ya existe un usuario con ese email"));
-
-            var subscription = await GetEffectiveSubscription(ownerId, ct);
-            var currentSecretaries = await _serviceRepository.CountAssignedSecretariesByOwnerId(ownerId, ct);
-
-            User user;
-            try
-            {
-                subscription.EnsureCanAssignSecretary(currentSecretaries);
-
-                user = User.CreateSecretary(
-                    PersonName.Create(dto.FirstName, dto.LastName),
-                    Email.Create(dto.Email),
-                    _dateTimeProvider.NowArgentina());
-            }
-            catch (DomainException ex)
-            {
-                return Result<UserEmailDispatchResultDto>.Failure(Error.Validation(ex.Message));
-            }
-
-            await _userRepository.AddOne(user, ct);
-            await _unitOfWork.SaveChanges(ct);
-
-            service.AssignSecretary(user.Id);
-            _serviceRepository.Update(service);
-
-            var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.SecretaryInvitation, SecretaryInvitationTtl, ct);
-
-            var owner = await _userRepository.GetOne(ownerId, ct);
-            var invitedByName = owner is null
-                ? "BOOKLY"
-                : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
-
-            var emailDispatch = await TrySendCriticalEmail(
-                () => _emailService.SendSecretaryInvitation(
-                    new SecretaryInvitationEmailModel(
-                        user.Email.Value,
-                        user.PersonName.FirstName,
-                        invitedByName,
-                        service.Name,
-                        rawToken,
-                        (int)SecretaryInvitationTtl.TotalHours),
-                    ct),
-                "invitación de secretario",
-                user.Email.Value,
-                "El secretario se creo correctamente y enviamos el email para completar el acceso.",
-                "El secretario se creo, pero no pudimos enviar el email de invitacion.");
-
-            return Result<UserEmailDispatchResultDto>.Success(
-                new UserEmailDispatchResultDto(
-                    await MapUserDtoAsync(user, ct),
-                    emailDispatch));
-        }
-
-        public async Task<Result<IReadOnlyCollection<SecretaryDto>>> GetSecretariesByOwner(int ownerId, CancellationToken ct = default)
-        {
-            var owner = await _userRepository.GetOne(ownerId, ct);
-            if (owner is null || owner.Role != UserRole.Owner)
-                return Result<IReadOnlyCollection<SecretaryDto>>.Failure(Error.NotFound("Usuario"));
-
-            var services = await _serviceRepository.GetServicesByOwnerWithSecretaries(ownerId, ct);
-            var secretaryServices = services
-                .SelectMany(service => service.SecretaryIds.Select(secretaryId => new { SecretaryId = secretaryId, ServiceId = service.Id }))
-                .GroupBy(x => x.SecretaryId)
-                .ToDictionary(
-                    group => group.Key,
-                    group => (IReadOnlyCollection<int>)group.Select(item => item.ServiceId).Distinct().ToList());
-
-            var result = new List<SecretaryDto>();
-
-            foreach (var secretaryId in secretaryServices.Keys.OrderBy(id => id))
-            {
-                var secretary = await _userRepository.GetOne(secretaryId, ct);
-                if (secretary is null || secretary.Role != UserRole.Secretary)
-                    continue;
-
-                result.Add(MapSecretaryDto(secretary, secretaryServices[secretaryId]));
-            }
-
-            return Result<IReadOnlyCollection<SecretaryDto>>.Success(result);
-        }
-
-        public async Task<Result<UserDto>> GetOwnerSecretaryById(int ownerId, int secretaryId, CancellationToken ct = default)
-        {
-            var secretaryResult = await GetOwnedSecretary(ownerId, secretaryId, ct);
-            if (secretaryResult.Error is not null)
-                return Result<UserDto>.Failure(secretaryResult.Error);
-
-            return Result<UserDto>.Success(await MapUserDtoAsync(secretaryResult.Secretary!, ct));
-        }
-
         public Task<Result<UserDto>> CompleteInvitation(CompleteSecretaryInvitationDto dto, CancellationToken ct = default)
             => CompleteUserInvitation(dto.Token, dto.Password, UserTokenPurpose.SecretaryInvitation, "invitación", ct);
 
         public Task<Result<UserDto>> CompleteAdminInvitation(CompleteAdminInvitationDto dto, CancellationToken ct = default)
             => CompleteUserInvitation(dto.Token, dto.Password, UserTokenPurpose.AdminInvitation, "invitacion de admin", ct);
-
-        public async Task<Result> ActivateSecretary(int id, int? ownerId = null, CancellationToken ct = default)
-        {
-            var secretaryResult = await ResolveSecretaryForUpdate(ownerId, id, ct);
-            if (secretaryResult.Error is not null)
-                return Result.Failure(secretaryResult.Error);
-
-            secretaryResult.Secretary!.Activate();
-            _userRepository.Update(secretaryResult.Secretary);
-            await _unitOfWork.SaveChanges(ct);
-
-            return Result.Success();
-        }
-
-        public async Task<Result> DeactivateSecretary(int id, int? ownerId = null, CancellationToken ct = default)
-        {
-            var secretaryResult = await ResolveSecretaryForUpdate(ownerId, id, ct);
-            if (secretaryResult.Error is not null)
-                return Result.Failure(secretaryResult.Error);
-
-            secretaryResult.Secretary!.Deactivate();
-            _userRepository.Update(secretaryResult.Secretary);
-            await _unitOfWork.SaveChanges(ct);
-
-            return Result.Success();
-        }
-
-        public async Task<Result<UserDto>> UpdateOwnerSecretary(
-            int ownerId,
-            int secretaryId,
-            UpdateUserDto dto,
-            CancellationToken ct = default)
-        {
-            var secretaryResult = await GetOwnedSecretary(ownerId, secretaryId, ct);
-            if (secretaryResult.Error is not null)
-                return Result<UserDto>.Failure(secretaryResult.Error);
-
-            return await UpdateExistingUser(secretaryResult.Secretary!, dto, ct);
-        }
 
         public async Task<Result<UserDto>> UpdateUser(int id, UpdateUserDto dto, CancellationToken ct = default)
         {
@@ -609,18 +465,6 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             return (null, token, user);
         }
-
-        private async Task<Subscription> GetEffectiveSubscription(int ownerId, CancellationToken ct)
-        {
-            var subscription = await _subscriptionRepository.GetByOwnerId(ownerId, ct);
-            var today = DateOnly.FromDateTime(_dateTimeProvider.NowArgentina());
-
-            if (subscription == null || !subscription.IsActive(today))
-                return Subscription.CreateFree(ownerId, _dateTimeProvider.NowArgentina());
-
-            return subscription;
-        }
-
         private async Task<Result<UserDto>> CompleteUserInvitation(
             string rawToken,
             string password,
@@ -654,47 +498,6 @@ namespace BOOKLY.Application.Services.UserAggregate
             await _unitOfWork.SaveChanges(ct);
 
             return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
-        }
-
-        private async Task<(Error? Error, User? Secretary)> ResolveSecretaryForUpdate(
-            int? ownerId,
-            int secretaryId,
-            CancellationToken ct)
-        {
-            if (!ownerId.HasValue)
-            {
-                var secretary = await _userRepository.GetOne(secretaryId, ct);
-                if (secretary is null || secretary.Role != UserRole.Secretary)
-                    return (Error.NotFound("Usuario"), null);
-
-                return (null, secretary);
-            }
-
-            return await GetOwnedSecretary(ownerId.Value, secretaryId, ct);
-        }
-
-        private async Task<(Error? Error, User? Secretary)> GetOwnedSecretary(
-            int ownerId,
-            int secretaryId,
-            CancellationToken ct)
-        {
-            var secretary = await _userRepository.GetOne(secretaryId, ct);
-            if (secretary is null || secretary.Role != UserRole.Secretary)
-                return (Error.NotFound("Usuario"), null);
-
-            var ownerIds = await _serviceRepository.GetOwnerIdsBySecretary(secretaryId, ct);
-            if (!ownerIds.Contains(ownerId))
-                return (Error.Forbidden("No tienes permisos para operar sobre este secretario."), null);
-
-            return (null, secretary);
-        }
-
-        private SecretaryDto MapSecretaryDto(User secretary, IReadOnlyCollection<int> serviceIds)
-        {
-            return _mapper.Map<SecretaryDto>(secretary, options =>
-            {
-                options.Items[UserMappingProfile.ServiceIdsContextKey] = serviceIds;
-            });
         }
 
         private async Task<UserDto> MapUserDtoAsync(User user, CancellationToken ct)

@@ -14,6 +14,19 @@ namespace BOOKLY.Infrastructure.Repositories
             return dbContext.Users.FirstOrDefaultAsync(user => user.Id == id, ct);
         }
 
+        public async Task<IReadOnlyCollection<User>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct = default)
+        {
+            if (ids.Count == 0)
+                return [];
+
+            var distinctIds = ids.Distinct().ToList();
+
+            return await dbContext.Users
+                .AsNoTracking()
+                .Where(user => distinctIds.Contains(user.Id))
+                .ToListAsync(ct);
+        }
+
         public Task<bool> ExistsByEmail(string email, CancellationToken ct = default)
         {
             var normalizedEmail = NormalizeEmail(email);
