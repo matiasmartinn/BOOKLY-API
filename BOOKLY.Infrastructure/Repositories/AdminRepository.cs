@@ -59,8 +59,6 @@ namespace BOOKLY.Infrastructure.Repositories
                 .AsNoTracking()
                 .CountAsync(service => service.IsActive, ct);
 
-            var subscriptionQuery = BuildCurrentSubscriptionQuery(today);
-
             var subscriptionsCount = await BuildCurrentSubscriptionQuery(today)
                 .GroupBy(_ => 1)
                 .Select(g => new
