@@ -1,5 +1,4 @@
 using AutoMapper;
-using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
@@ -69,27 +68,6 @@ namespace BOOKLY.Application.Services.UserAggregate
             var user = await _userRepository.GetOne(id, ct);
             if (user is null)
                 return Result<UserDto>.Failure(Error.NotFound("Usuario"));
-
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
-        }
-
-        public async Task<Result<UserDto>> Login(LoginDto dto, CancellationToken ct = default)
-        {
-            var user = await _userRepository.GetByEmail(dto.Email, ct);
-            if (user is null || user.Password is null || !user.VerifyPassword(dto.Password, _passwordHasher))
-                return Result<UserDto>.Failure(Error.Unauthorized("Credenciales inválidas."));
-
-            try
-            {
-                user.RegisterLogin(_dateTimeProvider.NowArgentina());
-            }
-            catch (DomainException ex)
-            {
-                return Result<UserDto>.Failure(Error.Unauthorized(ex.Message));
-            }
-
-            _userRepository.Update(user);
-            await _unitOfWork.SaveChanges(ct);
 
             return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
         }

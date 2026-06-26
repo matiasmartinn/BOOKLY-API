@@ -19,7 +19,7 @@ public sealed class UserServiceTests
     private static readonly DateTime ReferenceNow = new(2026, 4, 8, 10, 0, 0);
 
     [Fact]
-    public async Task Login_ShouldRejectInactiveUser()
+    public async Task GetUserById_ShouldReturnExistingUser()
     {
         var user = User.CreateOwner(
             PersonName.Create("Ada", "Lovelace"),
@@ -27,21 +27,17 @@ public sealed class UserServiceTests
             Password.FromHash("valid-hash"),
             ReferenceNow);
 
-        user.ConfirmEmail();
-        user.Deactivate();
+        user.Id = 10;
 
         var unitOfWork = new FakeUnitOfWork();
         var sut = CreateSut(user, unitOfWork);
 
-        var result = await sut.Login(new LoginDto
-        {
-            Email = user.Email.Value,
-            Password = "valid-password"
-        });
+        var result = await sut.GetUserById(user.Id);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(ErrorType.Unauthorized, result.Error.Type);
-        Assert.Equal("La cuenta está desactivada.", result.Error.Message);
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Equal(user.Id, result.Data!.Id);
+        Assert.Equal(user.Email.Value, result.Data.Email);
         Assert.Equal(0, unitOfWork.SaveChangesCalls);
     }
 
