@@ -67,6 +67,9 @@ namespace BOOKLY.Infrastructure.Persistence.Configurations
             builder.HasIndex(a => a.ServiceId)
                 .HasDatabaseName("ix_appointments_service_id");
 
+            builder.HasIndex(a => new { a.ServiceId, a.StartDateTime })
+                .HasDatabaseName("ix_appointments_service_id_start_date_time");
+
             builder.HasIndex(a => a.AssignedSecretaryId)
                 .HasDatabaseName("ix_appointments_assigned_secretary_id");
 

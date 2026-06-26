@@ -22,22 +22,34 @@ namespace BOOKLY.Infrastructure.Repositories
             DateTime recentActiveOwnersSince,
             CancellationToken ct = default)
         {
-            var totalUsers = await _dbContext.Users
+            var totalUser = await _dbContext.Users
                 .AsNoTracking()
-                .CountAsync(ct);
+                .CountAsync();
 
-            var owners = _dbContext.Users
+            var ownerCount = await _dbContext.Users
                 .AsNoTracking()
-                .Where(user => user.Role == UserRole.Owner);
+                .Where(u => u.Role == UserRole.Owner)
+                .GroupBy(u => u.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync(ct);
 
-            var totalOwners = await owners.CountAsync(ct);
-            var activeOwners = await owners.CountAsync(user => user.Status == UserStatus.Active, ct);
-            var disabledOwners = await owners.CountAsync(user => user.Status == UserStatus.Inactive, ct);
-            var pendingConfirmationOwners = await owners.CountAsync(user => user.Status == UserStatus.PendingEmailConfirmation, ct);
-            var pendingInvitationOwners = await owners.CountAsync(user => user.Status == UserStatus.PendingInvitationAcceptance, ct);
-            var recentActiveOwners = await owners.CountAsync(
-                user => user.LastLoginAt.HasValue && user.LastLoginAt.Value >= recentActiveOwnersSince,
-                ct);
+            var totalOwners = ownerCount.Sum(o => o.Count);
+
+            var activeOwners = ownerCount
+                .FirstOrDefault(o => o.Status == UserStatus.Active)?.Count ?? 0;
+
+            var disabledOwners = ownerCount
+                .FirstOrDefault(o => o.Status == UserStatus.Inactive)?.Count ?? 0;
+
+            var pendingConfirmationOwners = ownerCount
+                .FirstOrDefault(o => o.Status == UserStatus.PendingEmailConfirmation)?.Count ?? 0;
+
+            var pendingInvitationAdmins = ownerCount
+                .FirstOrDefault(o => o.Status == UserStatus.PendingInvitationAcceptance)?.Count ?? 0;
+
+            var recentActiveOwners = await _dbContext.Users.CountAsync(
+               user => user.LastLoginAt.HasValue && user.LastLoginAt.Value >= recentActiveOwnersSince && user.Role == UserRole.Owner,
+               ct);
 
             var totalServices = await _dbContext.Services
                 .AsNoTracking()
@@ -47,24 +59,29 @@ namespace BOOKLY.Infrastructure.Repositories
                 .AsNoTracking()
                 .CountAsync(service => service.IsActive, ct);
 
-            var activeSubscriptions = await BuildCurrentSubscriptionQuery(today)
-                .CountAsync(ct);
+            var subscriptionQuery = BuildCurrentSubscriptionQuery(today);
 
-            var paidSubscriptions = await BuildCurrentSubscriptionQuery(today)
-                .CountAsync(subscription => subscription.PlanName != PlanName.Free, ct);
+            var subscriptionsCount = await BuildCurrentSubscriptionQuery(today)
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Active = g.Count(),
+                    Paid = g.Count(s => s.PlanName != PlanName.Free)
+                })
+                .FirstOrDefaultAsync();
 
             return new AdminDashboardSummaryReadModel(
-                TotalUsers: totalUsers,
+                TotalUsers: totalUser,
                 TotalOwners: totalOwners,
                 TotalServices: totalServices,
                 ActiveOwners: activeOwners,
                 DisabledOwners: disabledOwners,
                 PendingConfirmationOwners: pendingConfirmationOwners,
-                PendingInvitationOwners: pendingInvitationOwners,
+                PendingInvitationOwners: pendingInvitationAdmins,
                 ActiveServices: activeServices,
                 DisabledServices: totalServices - activeServices,
-                ActiveSubscriptions: activeSubscriptions,
-                PaidSubscriptions: paidSubscriptions,
+                ActiveSubscriptions: subscriptionsCount?.Active ?? 0,
+                PaidSubscriptions: subscriptionsCount?.Paid ?? 0,
                 RecentActiveOwners: recentActiveOwners);
         }
 
