@@ -4,9 +4,6 @@ using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Services.MetricsAggregate.DTOs;
 using BOOKLY.Application.Services.MetricsAggregate.Models;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
-using BOOKLY.Domain.Aggregates.ServiceAggregate;
-using BOOKLY.Domain.Aggregates.UserAggregate;
-using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Queries;
 
@@ -27,19 +24,16 @@ namespace BOOKLY.Application.Services.MetricsAggregate
         ];
 
         private readonly IAppointmentRepository _appointmentRepository;
-        private readonly IServiceRepository _serviceRepository;
-        private readonly IUserRepository _userRepository;
+        private readonly IOwnerServiceScopeResolver _serviceScopeResolver;
         private readonly IMapper _mapper;
 
         public MetricsService(
             IAppointmentRepository appointmentRepository,
-            IServiceRepository serviceRepository,
-            IUserRepository userRepository,
+            IOwnerServiceScopeResolver serviceScopeResolver,
             IMapper mapper)
         {
             _appointmentRepository = appointmentRepository;
-            _serviceRepository = serviceRepository;
-            _userRepository = userRepository;
+            _serviceScopeResolver = serviceScopeResolver;
             _mapper = mapper;
         }
 
@@ -59,7 +53,7 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                 return Result<AppointmentMetricsDto>.Failure(
                     Error.Validation("El secretaryId indicado no es valido."));
 
-            var scopedServicesResult = await ResolveScopedServices(dto.OwnerId, dto.ServiceId, ct);
+            var scopedServicesResult = await _serviceScopeResolver.Resolve(dto.OwnerId, dto.ServiceId, ct);
             if (scopedServicesResult.IsFailure)
                 return Result<AppointmentMetricsDto>.Failure(scopedServicesResult.Error!);
 
@@ -183,33 +177,6 @@ namespace BOOKLY.Application.Services.MetricsAggregate
                     .Take(TopBucketCount)
                     .ToList()
             }));
-        }
-
-        private async Task<Result<List<Service>>> ResolveScopedServices(int? ownerId, int? serviceId, CancellationToken ct)
-        {
-            if (serviceId.HasValue)
-            {
-                var service = await _serviceRepository.GetOne(serviceId.Value, ct);
-                if (service == null)
-                    return Result<List<Service>>.Failure(Error.NotFound("Servicio"));
-
-                if (ownerId.HasValue && service.OwnerId != ownerId.Value)
-                    return Result<List<Service>>.Failure(
-                        Error.Validation("El servicio no pertenece al owner indicado."));
-
-                return Result<List<Service>>.Success([service]);
-            }
-
-            if (!ownerId.HasValue || ownerId.Value <= 0)
-                return Result<List<Service>>.Failure(
-                    Error.Validation("Debe indicar ownerId o serviceId."));
-
-            var owner = await _userRepository.GetOne(ownerId.Value, ct);
-            if (owner == null || owner.Role != UserRole.Owner)
-                return Result<List<Service>>.Failure(Error.NotFound("Usuario"));
-
-            var services = await _serviceRepository.GetServicesByOwner(ownerId.Value, ct);
-            return Result<List<Service>>.Success(services);
         }
 
         private static (DateOnly PreviousFrom, DateOnly PreviousTo) BuildPreviousPeriod(DateOnly from, DateOnly to)

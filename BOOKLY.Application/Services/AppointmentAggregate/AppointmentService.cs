@@ -1,4 +1,5 @@
 using AutoMapper;
+using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Mappings;
@@ -9,12 +10,10 @@ using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
-using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.SharedKernel;
-using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.AppointmentAggregate
 {
@@ -25,14 +24,15 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IServiceTypeRepository _serviceTypeRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAppointmentHistoryRepository _historyRepository;
+        private readonly IOwnerServiceScopeResolver _serviceScopeResolver;
         private readonly ISlotValidationService _slotValidationService;
         private readonly IEmailService _emailService;
+        private readonly ISafeEmailDispatcher _safeEmailDispatcher;
         private readonly IAppointmentCancellationNotificationService _appointmentCancellationNotificationService;
         private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
         private readonly IAppointmentValidator _appointmentValidator;
         private readonly IMapper _mapper;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<AppointmentService> _logger;
         private readonly IDateTimeProvider _dateTimeProvider;
 
         public AppointmentService(
@@ -41,29 +41,31 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IServiceTypeRepository serviceTypeRepository,
             IUserRepository userRepository,
             IAppointmentHistoryRepository historyRepository,
+            IOwnerServiceScopeResolver serviceScopeResolver,
             ISlotValidationService slotValidationService,
             IEmailService emailService,
+            ISafeEmailDispatcher safeEmailDispatcher,
             IAppointmentCancellationNotificationService appointmentCancellationNotificationService,
             IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
             IAppointmentValidator appointmentValidator,
             IMapper mapper,
             IUnitOfWork unitOfWork,
-            IDateTimeProvider dateTimeProvider,
-            ILogger<AppointmentService> logger)
+            IDateTimeProvider dateTimeProvider)
         {
             _repository = repository;
             _serviceRepository = serviceRepository;
             _serviceTypeRepository = serviceTypeRepository;
             _userRepository = userRepository;
             _historyRepository = historyRepository;
+            _serviceScopeResolver = serviceScopeResolver;
             _slotValidationService = slotValidationService;
             _emailService = emailService;
+            _safeEmailDispatcher = safeEmailDispatcher;
             _appointmentCancellationNotificationService = appointmentCancellationNotificationService;
             _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
             _appointmentValidator = appointmentValidator;
             _mapper = mapper;
             _unitOfWork = unitOfWork;
-            _logger = logger;
             _dateTimeProvider = dateTimeProvider;
         }
 
@@ -103,7 +105,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
         public async Task<Result<IReadOnlyCollection<AppointmentListItemDto>>> GetByDay(AppointmentDayQueryDto dto, CancellationToken ct = default)
         {
-            var scopedServicesResult = await ResolveScopedServices(dto.OwnerId, dto.ServiceId, ct);
+            var scopedServicesResult = await _serviceScopeResolver.Resolve(dto.OwnerId, dto.ServiceId, ct);
             if (scopedServicesResult.IsFailure)
                 return Result<IReadOnlyCollection<AppointmentListItemDto>>.Failure(scopedServicesResult.Error!);
 
@@ -140,7 +142,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     Error.Validation("El estado indicado no es válido."));
             }
 
-            var scopedServicesResult = await ResolveScopedServices(dto.OwnerId, dto.ServiceId, ct);
+            var scopedServicesResult = await _serviceScopeResolver.Resolve(dto.OwnerId, dto.ServiceId, ct);
             if (scopedServicesResult.IsFailure)
                 return Result<IReadOnlyCollection<AppointmentListItemDto>>.Failure(scopedServicesResult.Error!);
 
@@ -198,67 +200,76 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             var now = _dateTimeProvider.NowArgentina();
             var requestedStart = dto.StartDateTime;
 
-            var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(dto.ServiceId, ct);
-            if (service == null)
-                return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
+            Service? service = null;
+            Appointment? appointment = null;
 
-            var serviceType = await _serviceTypeRepository.GetByIdWithFields(service.ServiceTypeId, ct);
-            if (serviceType == null)
-                return Result<AppointmentDto>.Failure(Error.NotFound("TipoServicio"));
-
-            var subscription = await _effectiveSubscriptionResolver.Resolve(service.OwnerId, ct);
-
-            var canUseExtraFields = subscription.CanUseExtraFields();
-
-            if (!canUseExtraFields && dto.FieldValues.Count > 0)
-                return Result<AppointmentDto>.Failure(Error.Validation("El plan actual no permite utilizar campos extra."));
-
-            if (canUseExtraFields)
+            var result = await _unitOfWork.ExecuteInTransaction(async () =>
             {
-                var fieldValidation = _appointmentValidator.Validate(dto.FieldValues, serviceType);
-                if (fieldValidation.IsFailure)
-                    return Result<AppointmentDto>.Failure(fieldValidation.Error!);
-            }
+                // El lock sobre la fila del servicio serializa las reservas concurrentes y evita overbooking.
+                service = await _serviceRepository.GetOneWithSchedulesAndUnavailabilityForUpdate(dto.ServiceId, ct);
+                if (service == null)
+                    return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
 
-            var slotValidation = await _slotValidationService.ValidateSlotAvailability(
-                service,
-                requestedStart,
-                null,
-                requireActiveService: true,
-                ct);
-            if (slotValidation.IsFailure)
-                return Result<AppointmentDto>.Failure(slotValidation.Error!);
+                var serviceType = await _serviceTypeRepository.GetByIdWithFields(service.ServiceTypeId, ct);
+                if (serviceType == null)
+                    return Result<AppointmentDto>.Failure(Error.NotFound("TipoServicio"));
 
-            Appointment appointment;
-            try
-            {
-                appointment = Appointment.Create(
-                    dto.ServiceId,
-                    dto.AssignedSecretaryId,
-                    ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)),
-                    requestedStart,
-                    service.DurationMinutes,
-                    dto.ClientNotes,
-                    now,
-                    NormalizeActorUserId(dto.UserId));
+                var subscription = await _effectiveSubscriptionResolver.Resolve(service.OwnerId, ct);
+
+                var canUseExtraFields = subscription.CanUseExtraFields();
+
+                if (!canUseExtraFields && dto.FieldValues.Count > 0)
+                    return Result<AppointmentDto>.Failure(Error.Validation("El plan actual no permite utilizar campos extra."));
 
                 if (canUseExtraFields)
                 {
-                    foreach (var fv in dto.FieldValues)
-                        appointment.AddFieldValue(fv.FieldDefinitionId, fv.Value);
+                    var fieldValidation = _appointmentValidator.Validate(dto.FieldValues, serviceType);
+                    if (fieldValidation.IsFailure)
+                        return Result<AppointmentDto>.Failure(fieldValidation.Error!);
                 }
-            }
-            catch (DomainException ex)
-            {
-                return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
-            }
 
-            await _repository.AddOne(appointment, ct);
-            await _unitOfWork.SaveChanges(ct);
+                var slotValidation = await _slotValidationService.ValidateSlotAvailability(
+                    service,
+                    requestedStart,
+                    null,
+                    requireActiveService: true,
+                    ct);
+                if (slotValidation.IsFailure)
+                    return Result<AppointmentDto>.Failure(slotValidation.Error!);
 
-            await NotifyAppointmentCreated(service, appointment, ct);
+                try
+                {
+                    appointment = Appointment.Create(
+                        dto.ServiceId,
+                        dto.AssignedSecretaryId,
+                        ClientInfo.Create(dto.ClientName, dto.ClientPhone, Email.Create(dto.ClientEmail)),
+                        requestedStart,
+                        service.DurationMinutes,
+                        dto.ClientNotes,
+                        now,
+                        ActorUserId.Normalize(dto.UserId));
 
-            return Result<AppointmentDto>.Success(_mapper.Map<AppointmentDto>(appointment));
+                    if (canUseExtraFields)
+                    {
+                        foreach (var fv in dto.FieldValues)
+                            appointment.AddFieldValue(fv.FieldDefinitionId, fv.Value);
+                    }
+                }
+                catch (DomainException ex)
+                {
+                    return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
+                }
+
+                await _repository.AddOne(appointment, ct);
+                await _unitOfWork.SaveChanges(ct);
+
+                return Result<AppointmentDto>.Success(_mapper.Map<AppointmentDto>(appointment));
+            }, ct);
+
+            if (result.IsSuccess)
+                await NotifyAppointmentCreated(service!, appointment!, ct);
+
+            return result;
         }
 
         public async Task<Result<AppointmentDto>> UpdateAppointmentInformation(int id, UpdateAppointmentDto dto, CancellationToken ct = default)
@@ -287,39 +298,50 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         {
             var now = _dateTimeProvider.NowArgentina();
 
-            var appointment = await _repository.GetOne(id, ct);
-            if (appointment == null)
-                return Result<AppointmentDto>.Failure(Error.NotFound("Turno"));
+            Service? service = null;
+            Appointment? appointment = null;
+            DateTime previousStartDateTime = default;
 
-            var service = await _serviceRepository.GetOneWithSchedulesAndUnavailability(appointment.ServiceId, ct);
-            if (service == null)
-                return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
-
-            var slotValidation = await _slotValidationService.ValidateSlotAvailability(
-                service,
-                dto.StartDateTime,
-                appointment.Id,
-                requireActiveService: false,
-                ct);
-            if (slotValidation.IsFailure)
-                return Result<AppointmentDto>.Failure(slotValidation.Error!);
-
-            var previousStartDateTime = appointment.StartDateTime;
-            try
+            var result = await _unitOfWork.ExecuteInTransaction(async () =>
             {
-                appointment.Reschedule(dto.StartDateTime, service.DurationMinutes, now);
-            }
-            catch (DomainException ex)
-            {
-                return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
-            }
+                appointment = await _repository.GetOne(id, ct);
+                if (appointment == null)
+                    return Result<AppointmentDto>.Failure(Error.NotFound("Turno"));
 
-            _repository.Update(appointment);
-            await _unitOfWork.SaveChanges(ct);
+                // El lock sobre la fila del servicio serializa las reservas concurrentes y evita overbooking.
+                service = await _serviceRepository.GetOneWithSchedulesAndUnavailabilityForUpdate(appointment.ServiceId, ct);
+                if (service == null)
+                    return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
 
-            await NotifyAppointmentRescheduled(service, appointment, previousStartDateTime, ct);
+                var slotValidation = await _slotValidationService.ValidateSlotAvailability(
+                    service,
+                    dto.StartDateTime,
+                    appointment.Id,
+                    requireActiveService: false,
+                    ct);
+                if (slotValidation.IsFailure)
+                    return Result<AppointmentDto>.Failure(slotValidation.Error!);
 
-            return Result<AppointmentDto>.Success(_mapper.Map<AppointmentDto>(appointment));
+                previousStartDateTime = appointment.StartDateTime;
+                try
+                {
+                    appointment.Reschedule(dto.StartDateTime, service.DurationMinutes, now);
+                }
+                catch (DomainException ex)
+                {
+                    return Result<AppointmentDto>.Failure(Error.Validation(ex.Message));
+                }
+
+                _repository.Update(appointment);
+                await _unitOfWork.SaveChanges(ct);
+
+                return Result<AppointmentDto>.Success(_mapper.Map<AppointmentDto>(appointment));
+            }, ct);
+
+            if (result.IsSuccess)
+                await NotifyAppointmentRescheduled(service!, appointment!, previousStartDateTime, ct);
+
+            return result;
         }
 
         public async Task<Result> MarkAsCancel(int id, CancelAppointmentDto dto, CancellationToken ct = default)
@@ -335,7 +357,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             try
             {
-                appointment.MarkAsCancel(dto.Reason, now, NormalizeActorUserId(dto.UserId));
+                appointment.MarkAsCancel(dto.Reason, now, ActorUserId.Normalize(dto.UserId));
             }
             catch (DomainException ex)
             {
@@ -363,7 +385,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             try
             {
-                appointment.MarkAsAttended(now, NormalizeActorUserId(userId));
+                appointment.MarkAsAttended(now, ActorUserId.Normalize(userId));
             }
             catch (DomainException ex)
             {
@@ -399,7 +421,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             {
                 foreach (var appointment in expiredAppointments)
                 {
-                    appointment.MarkAsAttended(now, NormalizeActorUserId(userId));
+                    appointment.MarkAsAttended(now, ActorUserId.Normalize(userId));
                     _repository.Update(appointment);
                 }
             }
@@ -424,7 +446,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
 
             try
             {
-                appointment.MarkAsNoShow(now, NormalizeActorUserId(userId));
+                appointment.MarkAsNoShow(now, ActorUserId.Normalize(userId));
             }
             catch (DomainException ex)
             {
@@ -443,7 +465,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 ? "BOOKLY"
                 : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentCreatedToClient(
                     new AppointmentCreatedClientEmailModel(
                         appointment.Client.Email.Value,
@@ -459,7 +481,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (owner is null)
                 return;
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentCreatedToOwner(
                     new AppointmentCreatedOwnerEmailModel(
                         owner.Email.Value,
@@ -486,7 +508,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 ? "BOOKLY"
                 : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentRescheduledToClient(
                     new AppointmentRescheduledClientEmailModel(
                         appointment.Client.Email.Value,
@@ -503,7 +525,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (owner is null)
                 return;
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentRescheduledToOwner(
                     new AppointmentRescheduledOwnerEmailModel(
                         owner.Email.Value,
@@ -519,34 +541,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 "reprogramación de turno al owner",
                 owner.Email.Value);
         }
-
-        private async Task<Result<List<Service>>> ResolveScopedServices(int? ownerId, int? serviceId, CancellationToken ct)
-        {
-            if (serviceId.HasValue)
-            {
-                var service = await _serviceRepository.GetOne(serviceId.Value, ct);
-                if (service == null)
-                    return Result<List<Service>>.Failure(Error.NotFound("Servicio"));
-
-                if (ownerId.HasValue && service.OwnerId != ownerId.Value)
-                    return Result<List<Service>>.Failure(Error.Validation("El servicio no pertenece al owner indicado."));
-
-                return Result<List<Service>>.Success([service]);
-            }
-
-            if (!ownerId.HasValue || ownerId.Value <= 0)
-                return Result<List<Service>>.Failure(Error.Validation("Debe indicar ownerId o serviceId."));
-
-            var owner = await _userRepository.GetOne(ownerId.Value, ct);
-            if (owner == null || owner.Role != UserRole.Owner)
-                return Result<List<Service>>.Failure(Error.NotFound("Usuario"));
-
-            var services = await _serviceRepository.GetServicesByOwner(ownerId.Value, ct);
-            return Result<List<Service>>.Success(services);
-        }
-
-        private static int? NormalizeActorUserId(int? userId)
-            => userId.HasValue && userId.Value > 0 ? userId.Value : null;
 
         private async Task<List<AppointmentListItemDto>> MapListItemDtos(
             IReadOnlyCollection<Appointment> appointments,
@@ -596,23 +590,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     : $"{creationEntry.User.PersonName.FirstName} {creationEntry.User.PersonName.LastName}".Trim(),
                 CreatedByUserRole = creationEntry?.User?.Role.ToString()
             };
-        }
-
-        // Las notificaciones de email son complementarias y no deben revertir la operación principal.
-        private async Task TrySendEmail(Func<Task> sendEmail, string purpose, string recipientEmail)
-        {
-            try
-            {
-                await sendEmail();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "El turno se guardó correctamente, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                    purpose,
-                    recipientEmail);
-            }
         }
     }
 }

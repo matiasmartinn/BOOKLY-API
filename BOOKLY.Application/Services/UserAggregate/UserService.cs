@@ -1,8 +1,6 @@
-using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Common.Validators;
 using BOOKLY.Application.Interfaces;
-using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
@@ -10,54 +8,48 @@ using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
-using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
-using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.UserAggregate
 {
     public partial class UserService : IUserService
     {
-        private static readonly TimeSpan EmailConfirmationTtl = TimeSpan.FromHours(24);
-        private static readonly TimeSpan PasswordResetTtl = TimeSpan.FromHours(2);
-        private static readonly TimeSpan SecretaryInvitationTtl = TimeSpan.FromHours(24);
-
         private readonly IUserRepository _userRepository;
-        private readonly IServiceRepository _serviceRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IUserTokenRepository _userTokenRepository;
-        private readonly IInvitationTokenGenerator _invitationTokenGenerator;
         private readonly ITokenHashingService _tokenHashingService;
+        private readonly IUserTokenIssuer _userTokenIssuer;
+        private readonly IUserProfileUpdateService _userProfileUpdateService;
+        private readonly IUserDtoMapper _userDtoMapper;
+        private readonly ISafeEmailDispatcher _safeEmailDispatcher;
         private readonly IEmailService _emailService;
         private readonly IDateTimeProvider _dateTimeProvider;
-        private readonly IMapper _mapper;
-        private readonly ILogger<UserService> _logger;
 
         public UserService(
             IUserRepository userRepository,
-            IServiceRepository serviceRepository,
             IUnitOfWork unitOfWork,
             IPasswordHasher passwordHasher,
             ITokenHashingService tokenHashingService,
-            IInvitationTokenGenerator invitationTokenGenerator,
             IUserTokenRepository userTokenRepository,
+            IUserTokenIssuer userTokenIssuer,
+            IUserProfileUpdateService userProfileUpdateService,
+            IUserDtoMapper userDtoMapper,
+            ISafeEmailDispatcher safeEmailDispatcher,
             IEmailService emailService,
-            IDateTimeProvider dateTimeProvider,
-            IMapper mapper,
-            ILogger<UserService> logger)
+            IDateTimeProvider dateTimeProvider)
         {
             _userRepository = userRepository;
-            _serviceRepository = serviceRepository;
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
             _tokenHashingService = tokenHashingService;
-            _invitationTokenGenerator = invitationTokenGenerator;
             _userTokenRepository = userTokenRepository;
+            _userTokenIssuer = userTokenIssuer;
+            _userProfileUpdateService = userProfileUpdateService;
+            _userDtoMapper = userDtoMapper;
+            _safeEmailDispatcher = safeEmailDispatcher;
             _emailService = emailService;
             _dateTimeProvider = dateTimeProvider;
-            _mapper = mapper;
-            _logger = logger;
         }
 
         public async Task<Result<UserDto>> GetUserById(int id, CancellationToken ct = default)
@@ -69,7 +61,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return Result<UserDto>.Failure(Error.NotFound("Usuario"));
 
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
+            return Result<UserDto>.Success(await _userDtoMapper.Map(user, ct));
         }
 
         public async Task<Result<RegisterOwnerResultDto>> RegisterOwner(CreateUserDto dto, CancellationToken ct = default)
@@ -95,18 +87,24 @@ namespace BOOKLY.Application.Services.UserAggregate
                 return Result<RegisterOwnerResultDto>.Failure(Error.Validation(ex.Message));
             }
 
-            await _userRepository.AddOne(user, ct);
-            await _unitOfWork.SaveChanges(ct);
+            // Transacción única: si falla la emisión del token, el usuario tampoco queda persistido.
+            var token = await _unitOfWork.ExecuteInTransaction(async () =>
+            {
+                await _userRepository.AddOne(user, ct);
+                await _unitOfWork.SaveChanges(ct);
 
-            var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
+                var issuedToken = await _userTokenIssuer.CreateToken(user.Id, UserTokenPurpose.EmailConfirmation, ct);
+                await _unitOfWork.SaveChanges(ct);
+                return issuedToken;
+            }, ct);
 
-            var emailDispatch = await TrySendCriticalEmail(
+            var emailDispatch = await _safeEmailDispatcher.TrySendCritical(
                 () => _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
-                        rawToken,
-                        (int)EmailConfirmationTtl.TotalHours),
+                        token.RawToken,
+                        token.TtlHours),
                     ct),
                 "confirmación de registro",
                 user.Email.Value,
@@ -115,7 +113,7 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             return Result<RegisterOwnerResultDto>.Success(
                 new RegisterOwnerResultDto(
-                    await MapUserDtoAsync(user, ct),
+                    await _userDtoMapper.Map(user, ct),
                     emailDispatch));
         }
 
@@ -159,15 +157,16 @@ namespace BOOKLY.Application.Services.UserAggregate
                         "No encontramos una cuenta pendiente de confirmacion para ese email."));
             }
 
-            var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
+            var token = await _userTokenIssuer.CreateToken(user.Id, UserTokenPurpose.EmailConfirmation, ct);
+            await _unitOfWork.SaveChanges(ct);
 
-            var emailDispatch = await TrySendCriticalEmail(
+            var emailDispatch = await _safeEmailDispatcher.TrySendCritical(
                 () => _emailService.SendEmailConfirmation(
                     new EmailConfirmationEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
-                        rawToken,
-                        (int)EmailConfirmationTtl.TotalHours),
+                        token.RawToken,
+                        token.TtlHours),
                     ct),
                 "reenvío de confirmación de email",
                 user.Email.Value,
@@ -192,15 +191,16 @@ namespace BOOKLY.Application.Services.UserAggregate
                 return Result.Success();
             }
 
-            var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.PasswordReset, PasswordResetTtl, ct);
+            var token = await _userTokenIssuer.CreateToken(user.Id, UserTokenPurpose.PasswordReset, ct);
+            await _unitOfWork.SaveChanges(ct);
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendPasswordReset(
                     new PasswordResetEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
-                        rawToken,
-                        (int)PasswordResetTtl.TotalHours),
+                        token.RawToken,
+                        token.TtlHours),
                     ct),
                 "recuperación de contraseña",
                 user.Email.Value);
@@ -257,18 +257,23 @@ namespace BOOKLY.Application.Services.UserAggregate
                 return Result<UserEmailDispatchResultDto>.Failure(Error.Validation(ex.Message));
             }
 
-            await _userRepository.AddOne(user, ct);
-            await _unitOfWork.SaveChanges(ct);
+            var token = await _unitOfWork.ExecuteInTransaction(async () =>
+            {
+                await _userRepository.AddOne(user, ct);
+                await _unitOfWork.SaveChanges(ct);
 
-            var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.AdminInvitation, SecretaryInvitationTtl, ct);
+                var issuedToken = await _userTokenIssuer.CreateToken(user.Id, UserTokenPurpose.AdminInvitation, ct);
+                await _unitOfWork.SaveChanges(ct);
+                return issuedToken;
+            }, ct);
 
-            var emailDispatch = await TrySendCriticalEmail(
+            var emailDispatch = await _safeEmailDispatcher.TrySendCritical(
                 () => _emailService.SendAdminInvitation(
                     new AdminInvitationEmailModel(
                         user.Email.Value,
                         user.PersonName.FirstName,
-                        rawToken,
-                        (int)SecretaryInvitationTtl.TotalHours),
+                        token.RawToken,
+                        token.TtlHours),
                     ct),
                 "invitacion de admin",
                 user.Email.Value,
@@ -277,7 +282,7 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             return Result<UserEmailDispatchResultDto>.Success(
                 new UserEmailDispatchResultDto(
-                    await MapUserDtoAsync(user, ct),
+                    await _userDtoMapper.Map(user, ct),
                     emailDispatch));
         }
 
@@ -293,59 +298,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             if (user is null)
                 return Result<UserDto>.Failure(Error.NotFound("Usuario"));
 
-            return await UpdateExistingUser(user, dto, ct);
-        }
-
-        private async Task<Result<UserDto>> UpdateExistingUser(User user, UpdateUserDto dto, CancellationToken ct)
-        {
-            Email newEmail;
-            try
-            {
-                newEmail = Email.Create(dto.Email);
-            }
-            catch (DomainException ex)
-            {
-                return Result<UserDto>.Failure(Error.Validation(ex.Message));
-            }
-
-            var emailChanged = !string.Equals(user.Email.Value, newEmail.Value, StringComparison.OrdinalIgnoreCase);
-            if (emailChanged)
-            {
-                var existingUser = await _userRepository.GetByEmail(newEmail.Value, ct);
-                if (existingUser is not null && existingUser.Id != user.Id)
-                    return Result<UserDto>.Failure(Error.Conflict("Email ya está registrado."));
-            }
-
-            try
-            {
-                user.ChangeUserName(PersonName.Create(dto.FirstName, dto.LastName));
-                user.ChangeEmail(newEmail);
-            }
-            catch (DomainException ex)
-            {
-                return Result<UserDto>.Failure(Error.Validation(ex.Message));
-            }
-
-            _userRepository.Update(user);
-            await _unitOfWork.SaveChanges(ct);
-
-            if (emailChanged && user.Role != UserRole.Admin)
-            {
-                var rawToken = await CreateUserToken(user.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
-
-                await TrySendEmail(
-                    () => _emailService.SendEmailConfirmation(
-                        new EmailConfirmationEmailModel(
-                            user.Email.Value,
-                            user.PersonName.FirstName,
-                            rawToken,
-                            (int)EmailConfirmationTtl.TotalHours),
-                        ct),
-                    "confirmación de cambio de email",
-                    user.Email.Value);
-            }
-
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
+            return await _userProfileUpdateService.UpdateProfile(user, dto, ct);
         }
 
         public async Task<Result> DeleteUser(int id, CancellationToken ct = default)
@@ -399,22 +352,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             await _userRepository.AddOne(user, ct);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
-        }
-
-        private async Task<string> CreateUserToken(int userId, UserTokenPurpose purpose, TimeSpan ttl, CancellationToken ct)
-        {
-            var rawToken = _invitationTokenGenerator.GenerateToken();
-            var token = UserToken.Create(
-                userId,
-                purpose,
-                _tokenHashingService.HashToken(rawToken),
-                _dateTimeProvider.UtcNow(),
-                ttl);
-
-            await _userTokenRepository.AddOne(token, ct);
-            await _unitOfWork.SaveChanges(ct);
-            return rawToken;
+            return Result<UserDto>.Success(await _userDtoMapper.Map(user, ct));
         }
 
         private async Task<(Result? Error, UserToken? Token, User? User)> GetValidToken(
@@ -443,6 +381,7 @@ namespace BOOKLY.Application.Services.UserAggregate
 
             return (null, token, user);
         }
+
         private async Task<Result<UserDto>> CompleteUserInvitation(
             string rawToken,
             string password,
@@ -475,65 +414,7 @@ namespace BOOKLY.Application.Services.UserAggregate
             _userRepository.Update(user);
             await _unitOfWork.SaveChanges(ct);
 
-            return Result<UserDto>.Success(await MapUserDtoAsync(user, ct));
+            return Result<UserDto>.Success(await _userDtoMapper.Map(user, ct));
         }
-
-        private async Task<UserDto> MapUserDtoAsync(User user, CancellationToken ct)
-        {
-            IReadOnlyCollection<int> serviceIds = [];
-
-            if (user.Role == UserRole.Secretary)
-                serviceIds = await _serviceRepository.GetServiceIdsBySecretary(user.Id, ct);
-
-            return _mapper.Map<UserDto>(user, options =>
-            {
-                options.Items[UserMappingProfile.ServiceIdsContextKey] = serviceIds;
-            });
-        }
-
-        private async Task TrySendEmail(Func<Task> sendEmail, string purpose, string recipientEmail)
-        {
-            try
-            {
-                await sendEmail();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "La operación principal se completó, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                    purpose,
-                    recipientEmail);
-            }
-        }
-
-        private async Task<EmailDispatchResultDto> TrySendCriticalEmail(
-            Func<Task> sendEmail,
-            string purpose,
-            string recipientEmail,
-            string successMessage,
-            string failureMessage)
-        {
-            try
-            {
-                await sendEmail();
-                return new EmailDispatchResultDto(true, successMessage);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "La operación principal se completó, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                    purpose,
-                    recipientEmail);
-
-                var message = failureMessage;
-
-                return new EmailDispatchResultDto(false, message);
-            }
-        }
-
-
     }
 }
-

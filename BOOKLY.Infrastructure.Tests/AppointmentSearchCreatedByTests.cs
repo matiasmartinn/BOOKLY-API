@@ -1,6 +1,7 @@
 using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
 using BOOKLY.Application.Services.SlotValidationService;
@@ -92,21 +93,25 @@ public sealed class AppointmentSearchCreatedByTests
         FakeAppointmentRepository appointmentRepository,
         FakeAppointmentHistoryRepository historyRepository)
     {
+        var serviceRepository = new FakeServiceRepository(service);
+        var userRepository = new FakeUserRepository();
+
         return new AppointmentService(
             appointmentRepository,
-            new FakeServiceRepository(service),
+            serviceRepository,
             new FakeServiceTypeRepository(),
-            new FakeUserRepository(),
+            userRepository,
             historyRepository,
+            new OwnerServiceScopeResolver(serviceRepository, userRepository),
             new FakeSlotValidationService(),
             new FakeEmailService(),
+            new SafeEmailDispatcher(NullLogger<SafeEmailDispatcher>.Instance),
             new FakeAppointmentCancellationNotificationService(),
             new EffectiveSubscriptionResolver(new FakeSubscriptionRepository(), new StubDateTimeProvider()),
             new AppointmentValidator(),
             CreateMapper(),
             new FakeUnitOfWork(),
-            new StubDateTimeProvider(),
-            NullLogger<AppointmentService>.Instance);
+            new StubDateTimeProvider());
     }
 
     private static IMapper CreateMapper()
@@ -205,7 +210,7 @@ public sealed class AppointmentSearchCreatedByTests
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
 
-        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
+        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
             => Task.FromResult(new List<Appointment>());
 
         public Task<List<Appointment>> GetExpiredPendingByServices(IReadOnlyCollection<int> serviceIds, DateTime startOfToday, CancellationToken ct = default)
@@ -294,6 +299,7 @@ public sealed class AppointmentSearchCreatedByTests
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<BOOKLY.Domain.Aggregates.ServiceAggregate.Entities.ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -343,7 +349,7 @@ public sealed class AppointmentSearchCreatedByTests
         public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default)
             => Task.FromResult<Subscription?>(null);
 
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+        public Task<Subscription?> GetByOwnerIdTracked(int ownerId, CancellationToken ct = default)
             => Task.FromResult<Subscription?>(null);
 
         public Task AddOne(Subscription subscription, CancellationToken ct = default)
@@ -384,6 +390,9 @@ public sealed class AppointmentSearchCreatedByTests
     private sealed class FakeUnitOfWork : IUnitOfWork
     {
         public Task<int> SaveChanges(CancellationToken cancellationToken = default) => Task.FromResult(1);
+
+        public Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+            => operation();
     }
 
     private sealed class StubDateTimeProvider : IDateTimeProvider

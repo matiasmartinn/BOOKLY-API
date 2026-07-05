@@ -45,6 +45,13 @@ namespace BOOKLY.Application.DependencyInjection
             services.AddScoped<IEffectiveSubscriptionResolver, EffectiveSubscriptionResolver>();
             services.AddScoped<IAppointmentValidator, AppointmentValidator>();
             services.AddScoped<ISlotValidationService, SlotValidationService>();
+
+            // SHARED COLLABORATORS
+            services.AddScoped<ISafeEmailDispatcher, SafeEmailDispatcher>();
+            services.AddScoped<IOwnerServiceScopeResolver, OwnerServiceScopeResolver>();
+            services.AddScoped<IUserTokenIssuer, UserTokenIssuer>();
+            services.AddScoped<IUserDtoMapper, UserDtoMapper>();
+            services.AddScoped<IUserProfileUpdateService, UserProfileUpdateService>();
             services.AddScoped<IDomainEventHandler<AppointmentCreatedEvent>, RecordAppointmentCreatedHandler>();
             services.AddScoped<IDomainEventHandler<AppointmentStatusChangedEvent>, RecordStatusChangedHandler>();
 

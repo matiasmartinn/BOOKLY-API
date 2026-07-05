@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
@@ -376,6 +379,30 @@ namespace BOOKLY.Domain.Aggregates.ServiceAggregate
             return string.IsNullOrWhiteSpace(slug)
                 ? string.Empty
                 : slug.Trim().ToLowerInvariant().Replace(" ", "-");
+        }
+
+        public static string Slugify(string value)
+        {
+            var normalized = value.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+
+            foreach (var ch in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
+                    continue;
+
+                builder.Append(char.ToLowerInvariant(ch));
+            }
+
+            var slug = builder.ToString().Normalize(NormalizationForm.FormC);
+            slug = Regex.Replace(slug, @"[^a-z0-9\s-]", string.Empty);
+            slug = Regex.Replace(slug, @"\s+", "-");
+            slug = Regex.Replace(slug, @"-+", "-").Trim('-');
+
+            if (string.IsNullOrWhiteSpace(slug))
+                slug = "service";
+
+            return slug;
         }
 
         private void SetPublicBookingCode(string publicBookingCode, DateTime updatedAt)

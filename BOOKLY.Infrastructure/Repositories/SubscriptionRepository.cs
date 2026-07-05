@@ -15,10 +15,9 @@ namespace BOOKLY.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.OwnerId == ownerId, ct);
         }
 
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+        public Task<Subscription?> GetByOwnerIdTracked(int ownerId, CancellationToken ct = default)
         {
             return dbContext.Set<Subscription>()
-                // Tracking por default
                 .FirstOrDefaultAsync(s => s.OwnerId == ownerId, ct);
         }
     }

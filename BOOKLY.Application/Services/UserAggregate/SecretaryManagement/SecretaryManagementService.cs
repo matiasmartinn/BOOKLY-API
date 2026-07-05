@@ -10,53 +10,48 @@ using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
-using BOOKLY.Domain.Repositories;
 using BOOKLY.Domain.SharedKernel;
-using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.UserAggregate.SecretaryManagement;
 
 public sealed class SecretaryManagementService : ISecretaryManagementService
 {
-    private static readonly TimeSpan EmailConfirmationTtl = TimeSpan.FromHours(24);
-    private static readonly TimeSpan SecretaryInvitationTtl = TimeSpan.FromHours(24);
-
     private readonly IUserRepository _userRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IUserTokenRepository _userTokenRepository;
-    private readonly IInvitationTokenGenerator _invitationTokenGenerator;
-    private readonly ITokenHashingService _tokenHashingService;
+    private readonly IUserTokenIssuer _userTokenIssuer;
+    private readonly IUserProfileUpdateService _userProfileUpdateService;
+    private readonly IUserDtoMapper _userDtoMapper;
+    private readonly ISafeEmailDispatcher _safeEmailDispatcher;
     private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
     private readonly IEmailService _emailService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IMapper _mapper;
-    private readonly ILogger<SecretaryManagementService> _logger;
 
     public SecretaryManagementService(
         IUserRepository userRepository,
         IServiceRepository serviceRepository,
         IUnitOfWork unitOfWork,
-        IUserTokenRepository userTokenRepository,
-        IInvitationTokenGenerator invitationTokenGenerator,
-        ITokenHashingService tokenHashingService,
+        IUserTokenIssuer userTokenIssuer,
+        IUserProfileUpdateService userProfileUpdateService,
+        IUserDtoMapper userDtoMapper,
+        ISafeEmailDispatcher safeEmailDispatcher,
         IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
         IEmailService emailService,
         IDateTimeProvider dateTimeProvider,
-        IMapper mapper,
-        ILogger<SecretaryManagementService> logger)
+        IMapper mapper)
     {
         _userRepository = userRepository;
         _serviceRepository = serviceRepository;
         _unitOfWork = unitOfWork;
-        _userTokenRepository = userTokenRepository;
-        _invitationTokenGenerator = invitationTokenGenerator;
-        _tokenHashingService = tokenHashingService;
+        _userTokenIssuer = userTokenIssuer;
+        _userProfileUpdateService = userProfileUpdateService;
+        _userDtoMapper = userDtoMapper;
+        _safeEmailDispatcher = safeEmailDispatcher;
         _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
         _emailService = emailService;
         _dateTimeProvider = dateTimeProvider;
         _mapper = mapper;
-        _logger = logger;
     }
 
     public async Task<Result<UserEmailDispatchResultDto>> CreateSecretary(
@@ -92,37 +87,42 @@ public sealed class SecretaryManagementService : ISecretaryManagementService
             return Result<UserEmailDispatchResultDto>.Failure(Error.Validation(ex.Message));
         }
 
-        await _userRepository.AddOne(user, ct);
-        await _unitOfWork.SaveChanges(ct);
+        // Transacción única: usuario, asignación al servicio y token quedan persistidos todos o ninguno.
+        var token = await _unitOfWork.ExecuteInTransaction(async () =>
+        {
+            await _userRepository.AddOne(user, ct);
+            await _unitOfWork.SaveChanges(ct);
 
-        service.AssignSecretary(user.Id);
-        _serviceRepository.Update(service);
-        var rawToken = await AddUserToken(user.Id, UserTokenPurpose.SecretaryInvitation, SecretaryInvitationTtl, ct);
-        await _unitOfWork.SaveChanges(ct);
+            service.AssignSecretary(user.Id);
+            _serviceRepository.Update(service);
+            var issuedToken = await _userTokenIssuer.CreateToken(user.Id, UserTokenPurpose.SecretaryInvitation, ct);
+            await _unitOfWork.SaveChanges(ct);
+            return issuedToken;
+        }, ct);
 
         var owner = await _userRepository.GetOne(ownerId, ct);
         var invitedByName = owner is null
             ? "BOOKLY"
             : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
 
-        var emailDispatch = await TrySendCriticalEmail(
+        var emailDispatch = await _safeEmailDispatcher.TrySendCritical(
             () => _emailService.SendSecretaryInvitation(
                 new SecretaryInvitationEmailModel(
                     user.Email.Value,
                     user.PersonName.FirstName,
                     invitedByName,
                     service.Name,
-                    rawToken,
-                    (int)SecretaryInvitationTtl.TotalHours),
+                    token.RawToken,
+                    token.TtlHours),
                 ct),
-            "invitaci\u00F3n de secretario",
+            "invitación de secretario",
             user.Email.Value,
             "El secretario se creo correctamente y enviamos el email para completar el acceso.",
             "El secretario se creo, pero no pudimos enviar el email de invitacion.");
 
         return Result<UserEmailDispatchResultDto>.Success(
             new UserEmailDispatchResultDto(
-                await MapUserDtoAsync(user, ct),
+                await _userDtoMapper.Map(user, ct),
                 emailDispatch));
     }
 
@@ -167,7 +167,7 @@ public sealed class SecretaryManagementService : ISecretaryManagementService
         if (secretaryResult.Error is not null)
             return Result<UserDto>.Failure(secretaryResult.Error);
 
-        return Result<UserDto>.Success(await MapUserDtoAsync(secretaryResult.Secretary!, ct));
+        return Result<UserDto>.Success(await _userDtoMapper.Map(secretaryResult.Secretary!, ct));
     }
 
     public async Task<Result> ActivateSecretary(int id, int? ownerId = null, CancellationToken ct = default)
@@ -206,60 +206,7 @@ public sealed class SecretaryManagementService : ISecretaryManagementService
         if (secretaryResult.Error is not null)
             return Result<UserDto>.Failure(secretaryResult.Error);
 
-        return await UpdateExistingSecretary(secretaryResult.Secretary!, dto, ct);
-    }
-
-    private async Task<Result<UserDto>> UpdateExistingSecretary(User secretary, UpdateUserDto dto, CancellationToken ct)
-    {
-        Email newEmail;
-        try
-        {
-            newEmail = Email.Create(dto.Email);
-        }
-        catch (DomainException ex)
-        {
-            return Result<UserDto>.Failure(Error.Validation(ex.Message));
-        }
-
-        var emailChanged = !string.Equals(secretary.Email.Value, newEmail.Value, StringComparison.OrdinalIgnoreCase);
-        if (emailChanged)
-        {
-            var existingUser = await _userRepository.GetByEmail(newEmail.Value, ct);
-            if (existingUser is not null && existingUser.Id != secretary.Id)
-                return Result<UserDto>.Failure(Error.Conflict("Email ya est\u00E1 registrado."));
-        }
-
-        try
-        {
-            secretary.ChangeUserName(PersonName.Create(dto.FirstName, dto.LastName));
-            secretary.ChangeEmail(newEmail);
-        }
-        catch (DomainException ex)
-        {
-            return Result<UserDto>.Failure(Error.Validation(ex.Message));
-        }
-
-        _userRepository.Update(secretary);
-        await _unitOfWork.SaveChanges(ct);
-
-        if (emailChanged)
-        {
-            var rawToken = await AddUserToken(secretary.Id, UserTokenPurpose.EmailConfirmation, EmailConfirmationTtl, ct);
-            await _unitOfWork.SaveChanges(ct);
-
-            await TrySendEmail(
-                () => _emailService.SendEmailConfirmation(
-                    new EmailConfirmationEmailModel(
-                        secretary.Email.Value,
-                        secretary.PersonName.FirstName,
-                        rawToken,
-                        (int)EmailConfirmationTtl.TotalHours),
-                    ct),
-                "confirmaci\u00F3n de cambio de email",
-                secretary.Email.Value);
-        }
-
-        return Result<UserDto>.Success(await MapUserDtoAsync(secretary, ct));
+        return await _userProfileUpdateService.UpdateProfile(secretaryResult.Secretary!, dto, ct);
     }
 
     private async Task<(Error? Error, User? Secretary)> ResolveSecretaryForUpdate(
@@ -301,76 +248,5 @@ public sealed class SecretaryManagementService : ISecretaryManagementService
         {
             options.Items[UserMappingProfile.ServiceIdsContextKey] = serviceIds;
         });
-    }
-
-    private async Task<UserDto> MapUserDtoAsync(User user, CancellationToken ct)
-    {
-        IReadOnlyCollection<int> serviceIds = [];
-
-        if (user.Role == UserRole.Secretary)
-            serviceIds = await _serviceRepository.GetServiceIdsBySecretary(user.Id, ct);
-
-        return _mapper.Map<UserDto>(user, options =>
-        {
-            options.Items[UserMappingProfile.ServiceIdsContextKey] = serviceIds;
-        });
-    }
-
-    private async Task<string> AddUserToken(
-        int userId,
-        UserTokenPurpose purpose,
-        TimeSpan ttl,
-        CancellationToken ct)
-    {
-        var rawToken = _invitationTokenGenerator.GenerateToken();
-        var token = UserToken.Create(
-            userId,
-            purpose,
-            _tokenHashingService.HashToken(rawToken),
-            _dateTimeProvider.UtcNow(),
-            ttl);
-
-        await _userTokenRepository.AddOne(token, ct);
-        return rawToken;
-    }
-
-    private async Task TrySendEmail(Func<Task> sendEmail, string purpose, string recipientEmail)
-    {
-        try
-        {
-            await sendEmail();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "La operaci\u00F3n principal se complet\u00F3, pero ocurri\u00F3 un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                purpose,
-                recipientEmail);
-        }
-    }
-
-    private async Task<EmailDispatchResultDto> TrySendCriticalEmail(
-        Func<Task> sendEmail,
-        string purpose,
-        string recipientEmail,
-        string successMessage,
-        string failureMessage)
-    {
-        try
-        {
-            await sendEmail();
-            return new EmailDispatchResultDto(true, successMessage);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "La operaci\u00F3n principal se complet\u00F3, pero ocurri\u00F3 un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                purpose,
-                recipientEmail);
-
-            return new EmailDispatchResultDto(false, failureMessage);
-        }
     }
 }

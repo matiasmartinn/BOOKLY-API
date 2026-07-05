@@ -44,29 +44,14 @@ namespace BOOKLY.Infrastructure.Persistence
                 .Select(e => e.Entity)
                 .ToList();
 
+            // Con una transacción ambiente (ExecuteInTransaction), participa de ella en lugar de anidar una propia.
+            if (Database.CurrentTransaction is not null)
+                return await SaveAndDispatchEventsAsync(aggregates, cancellationToken);
+
             await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                var result = await SaveWithConflictHandlingAsync(cancellationToken);
-
-                if (aggregates.Count > 0)
-                {
-                    foreach (var aggregate in aggregates)
-                    {
-                        await _dispatcher.Dispatch(aggregate.DomainEvents, cancellationToken);
-                    }
-
-                    foreach (var aggregate in aggregates)
-                    {
-                        aggregate.ClearDomainEvents();
-                    }
-
-                    if (ChangeTracker.HasChanges())
-                    {
-                        await SaveWithConflictHandlingAsync(cancellationToken);
-                    }
-                }
-
+                var result = await SaveAndDispatchEventsAsync(aggregates, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return result;
             }
@@ -75,6 +60,50 @@ namespace BOOKLY.Infrastructure.Persistence
                 await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
+        }
+
+        public async Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+        {
+            if (Database.CurrentTransaction is not null)
+                return await operation();
+
+            await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var result = await operation();
+                await transaction.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        private async Task<int> SaveAndDispatchEventsAsync(List<AggregateRoot> aggregates, CancellationToken cancellationToken)
+        {
+            var result = await SaveWithConflictHandlingAsync(cancellationToken);
+
+            if (aggregates.Count > 0)
+            {
+                foreach (var aggregate in aggregates)
+                {
+                    await _dispatcher.Dispatch(aggregate.DomainEvents, cancellationToken);
+                }
+
+                foreach (var aggregate in aggregates)
+                {
+                    aggregate.ClearDomainEvents();
+                }
+
+                if (ChangeTracker.HasChanges())
+                {
+                    await SaveWithConflictHandlingAsync(cancellationToken);
+                }
+            }
+
+            return result;
         }
 
         private async Task<int> SaveWithConflictHandlingAsync(CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 using AutoMapper;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.SecretaryManagement;
@@ -88,18 +89,37 @@ public sealed class SecretaryManagementServiceTests
         FakeEmailService? emailService = null,
         FakeUnitOfWork? unitOfWork = null)
     {
-        return new SecretaryManagementService(
-            userRepository,
-            serviceRepository,
-            unitOfWork ?? new FakeUnitOfWork(),
+        var mapper = CreateMapper();
+        var resolvedUnitOfWork = unitOfWork ?? new FakeUnitOfWork();
+        var resolvedEmailService = emailService ?? new FakeEmailService();
+        var dateTimeProvider = new StubDateTimeProvider();
+        var userTokenIssuer = new UserTokenIssuer(
             tokenRepository ?? new FakeUserTokenRepository(),
             new FakeInvitationTokenGenerator(),
             new FakeTokenHashingService(),
+            dateTimeProvider);
+        var userDtoMapper = new UserDtoMapper(serviceRepository, mapper);
+        var safeEmailDispatcher = new SafeEmailDispatcher(NullLogger<SafeEmailDispatcher>.Instance);
+        var userProfileUpdateService = new UserProfileUpdateService(
+            userRepository,
+            resolvedUnitOfWork,
+            userTokenIssuer,
+            userDtoMapper,
+            safeEmailDispatcher,
+            resolvedEmailService);
+
+        return new SecretaryManagementService(
+            userRepository,
+            serviceRepository,
+            resolvedUnitOfWork,
+            userTokenIssuer,
+            userProfileUpdateService,
+            userDtoMapper,
+            safeEmailDispatcher,
             new FakeEffectiveSubscriptionResolver(),
-            emailService ?? new FakeEmailService(),
-            new StubDateTimeProvider(),
-            CreateMapper(),
-            NullLogger<SecretaryManagementService>.Instance);
+            resolvedEmailService,
+            dateTimeProvider,
+            mapper);
     }
 
     private static IMapper CreateMapper()
@@ -236,6 +256,7 @@ public sealed class SecretaryManagementServiceTests
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -316,6 +337,9 @@ public sealed class SecretaryManagementServiceTests
             SaveChangesCalls++;
             return Task.FromResult(1);
         }
+
+        public Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+            => operation();
     }
 
     private sealed class StubDateTimeProvider : IDateTimeProvider

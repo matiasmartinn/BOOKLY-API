@@ -102,7 +102,7 @@ public sealed class EffectiveSubscriptionResolverTests
         public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default)
             => Task.FromResult(subscription);
 
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+        public Task<Subscription?> GetByOwnerIdTracked(int ownerId, CancellationToken ct = default)
             => Task.FromResult(subscription);
 
         public Task AddOne(Subscription subscription, CancellationToken ct = default)

@@ -3,7 +3,6 @@ using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
-using Microsoft.Extensions.Logging;
 
 namespace BOOKLY.Application.Services.AppointmentAggregate
 {
@@ -11,16 +10,16 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
     {
         private readonly IUserRepository _userRepository;
         private readonly IEmailService _emailService;
-        private readonly ILogger<AppointmentCancellationNotificationService> _logger;
+        private readonly ISafeEmailDispatcher _safeEmailDispatcher;
 
         public AppointmentCancellationNotificationService(
             IUserRepository userRepository,
             IEmailService emailService,
-            ILogger<AppointmentCancellationNotificationService> logger)
+            ISafeEmailDispatcher safeEmailDispatcher)
         {
             _userRepository = userRepository;
             _emailService = emailService;
-            _logger = logger;
+            _safeEmailDispatcher = safeEmailDispatcher;
         }
 
         public async Task NotifyAppointmentCancelled(
@@ -34,7 +33,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                 ? "BOOKLY"
                 : $"{owner.PersonName.FirstName} {owner.PersonName.LastName}";
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentCancelledToClient(
                     new AppointmentCancelledClientEmailModel(
                         appointment.Client.Email.Value,
@@ -50,7 +49,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (!notifyOwner || owner is null)
                 return;
 
-            await TrySendEmail(
+            await _safeEmailDispatcher.TrySend(
                 () => _emailService.SendAppointmentCancelledToOwner(
                     new AppointmentCancelledOwnerEmailModel(
                         owner.Email.Value,
@@ -64,22 +63,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     ct),
                 "cancelación de turno al owner",
                 owner.Email.Value);
-        }
-
-        private async Task TrySendEmail(Func<Task> sendEmail, string purpose, string recipientEmail)
-        {
-            try
-            {
-                await sendEmail();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "El turno se guardó correctamente, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
-                    purpose,
-                    recipientEmail);
-            }
         }
     }
 }

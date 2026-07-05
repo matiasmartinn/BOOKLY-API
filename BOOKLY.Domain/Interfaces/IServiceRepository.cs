@@ -12,6 +12,9 @@ namespace BOOKLY.Domain.Interfaces
         Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default);
         Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default);
         Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default);
+        // Toma un lock exclusivo sobre el servicio para serializar operaciones que afectan su disponibilidad.
+        // Debe invocarse dentro de una transacción del UnitOfWork; sin ella el lock se libera de inmediato.
+        Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default);
         Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default);
         Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default);
         Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default);

@@ -1,6 +1,7 @@
 using AutoMapper;
 using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
+using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.DTOs;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
@@ -43,18 +44,38 @@ public sealed class UserServiceTests
 
     private static UserService CreateSut(User user, FakeUnitOfWork unitOfWork)
     {
+        var userRepository = new FakeUserRepository(user);
+        var tokenHashingService = new FakeTokenHashingService();
+        var userTokenRepository = new FakeUserTokenRepository();
+        var emailService = new FakeEmailService();
+        var dateTimeProvider = new StubDateTimeProvider();
+        var userTokenIssuer = new UserTokenIssuer(
+            userTokenRepository,
+            new FakeInvitationTokenGenerator(),
+            tokenHashingService,
+            dateTimeProvider);
+        var userDtoMapper = new UserDtoMapper(new FakeServiceRepository(), CreateMapper());
+        var safeEmailDispatcher = new SafeEmailDispatcher(NullLogger<SafeEmailDispatcher>.Instance);
+        var userProfileUpdateService = new UserProfileUpdateService(
+            userRepository,
+            unitOfWork,
+            userTokenIssuer,
+            userDtoMapper,
+            safeEmailDispatcher,
+            emailService);
+
         return new UserService(
-            new FakeUserRepository(user),
-            new FakeServiceRepository(),
+            userRepository,
             unitOfWork,
             new FakePasswordHasher(),
-            new FakeTokenHashingService(),
-            new FakeInvitationTokenGenerator(),
-            new FakeUserTokenRepository(),
-            new FakeEmailService(),
-            new StubDateTimeProvider(),
-            CreateMapper(),
-            NullLogger<UserService>.Instance);
+            tokenHashingService,
+            userTokenRepository,
+            userTokenIssuer,
+            userProfileUpdateService,
+            userDtoMapper,
+            safeEmailDispatcher,
+            emailService,
+            dateTimeProvider);
     }
 
     private static IMapper CreateMapper()
@@ -99,6 +120,7 @@ public sealed class UserServiceTests
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => throw new NotImplementedException();
@@ -127,6 +149,9 @@ public sealed class UserServiceTests
             SaveChangesCalls++;
             return Task.FromResult(1);
         }
+
+        public Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+            => operation();
     }
 
     private sealed class FakePasswordHasher : IPasswordHasher

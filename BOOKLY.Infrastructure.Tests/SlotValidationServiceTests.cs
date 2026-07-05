@@ -246,7 +246,7 @@ public sealed class SlotValidationServiceTests
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default)
             => throw new NotImplementedException();
 
-        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
+        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<List<Appointment>> GetExpiredPendingByServices(IReadOnlyCollection<int> serviceIds, DateTime startOfToday, CancellationToken ct = default)

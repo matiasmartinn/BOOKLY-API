@@ -88,7 +88,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (validation.IsFailure)
                 return Result<SubscriptionDto>.Failure(validation.Error);
 
-            var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(ownerId, ct);
+            var subscription = await _subscriptionRepository.GetByOwnerIdTracked(ownerId, ct);
             if (subscription == null)
                 return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
@@ -114,7 +114,7 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             if (validation.IsFailure)
                 return Result<SubscriptionDto>.Failure(validation.Error);
 
-            var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
+            var subscription = await _subscriptionRepository.GetByOwnerIdTracked(dto.OwnerId, ct);
             if (subscription == null)
                 return Result<SubscriptionDto>.Failure(Error.NotFound("Suscripción"));
 
@@ -147,67 +147,32 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
 
             var newPlan = planResult.Plan!;
             var now = _dateTimeProvider.NowArgentina();
-            var today = DateOnly.FromDateTime(now);
-            var paidPeriod = newPlan.Name == PlanName.Free
-                ? null
-                : CreatePaidMonthlyPeriod(now);
 
-            var subscription = await _subscriptionRepository.GetByOwnerIdForUpdate(dto.OwnerId, ct);
+            var subscription = await _subscriptionRepository.GetByOwnerIdTracked(dto.OwnerId, ct);
 
             try
             {
                 if (subscription is null)
                 {
-                    if (newPlan.Name == PlanName.Free)
-                    {
-                        var freeSubscription = Subscription.CreateFree(dto.OwnerId, now);
-                        await _subscriptionRepository.AddOne(freeSubscription, ct);
-                        await _unitOfWork.SaveChanges(ct);
-                        return Result<SubscriptionDto>.Success(MapSubscriptionDto(freeSubscription, dto.OwnerId, now));
-                    }
-
-                    var paidSubscription = Subscription.CreatePaid(dto.OwnerId, newPlan, paidPeriod!, now);
-                    await _subscriptionRepository.AddOne(paidSubscription, ct);
-                    await _unitOfWork.SaveChanges(ct);
-                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(paidSubscription, dto.OwnerId, now));
-                }
-
-                if (newPlan.Name == subscription.Plan.Name)
-                    return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
-
-                if (newPlan.Name == PlanName.Free)
-                {
-                    var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
-                    subscription.ChangeToFree(today, currentServices, currentSecretaries, now);
-                }
-                else if (subscription.Plan.Name == PlanName.Free)
-                {
-                    subscription.SwitchFromFreeToPaid(newPlan, paidPeriod!, now);
+                    subscription = Subscription.Create(dto.OwnerId, newPlan, now);
+                    await _subscriptionRepository.AddOne(subscription, ct);
                 }
                 else
                 {
-                    if (newPlan.Name < subscription.Plan.Name)
-                    {
-                        var (currentServices, currentSecretaries) = await GetOwnerCounts(dto.OwnerId, ct);
-                        subscription.DowngradeTo(newPlan, currentServices, currentSecretaries, now);
-                    }
-                    else if (newPlan.Name > subscription.Plan.Name)
-                    {
-                        subscription.UpgradeTo(newPlan, now);
-                    }
-
-                    subscription.Renew(paidPeriod!, now);
+                    var usage = await GetUsageIfNeeded(subscription, dto.OwnerId, newPlan, ct);
+                    subscription.ChangePlan(newPlan, usage, now);
+                    _subscriptionRepository.Update(subscription);
                 }
+
+                await _unitOfWork.SaveChanges(ct);
+
+                return Result<SubscriptionDto>.Success(
+                    MapSubscriptionDto(subscription, dto.OwnerId, now));
             }
             catch (DomainException ex)
             {
                 return Result<SubscriptionDto>.Failure(Error.Validation(ex.Message));
             }
-
-            _subscriptionRepository.Update(subscription);
-            await _unitOfWork.SaveChanges(ct);
-
-            return Result<SubscriptionDto>.Success(MapSubscriptionDto(subscription, dto.OwnerId, now));
         }
         private async Task<(int Services, int Secretaries)> GetOwnerCounts(int ownerId, CancellationToken ct)
         {
@@ -292,6 +257,26 @@ namespace BOOKLY.Application.Services.SubscriptionAggregate
             return false;
         }
 
+        private async Task<SubscriptionUsage> GetUsageIfNeeded(
+            Subscription subscription,
+            int ownerId,
+            SubscriptionPlan newPlan,
+            CancellationToken ct)
+        {
+            if (newPlan.Name == subscription.Plan.Name)
+                return SubscriptionUsage.Empty;
+
+            var requiresUsage =
+                newPlan.Name == PlanName.Free ||
+                newPlan.Name < subscription.Plan.Name;
+
+            if (!requiresUsage)
+                return SubscriptionUsage.Empty;
+
+            var (currentServices, currentSecretaries) = await GetOwnerCounts(ownerId, ct);
+
+            return new SubscriptionUsage(currentServices, currentSecretaries);
+        }
         private SubscriptionDto MapSubscriptionDto(Subscription? persistedSubscription, int ownerId, DateTime now)
         {
             var subscription = persistedSubscription ?? Subscription.CreateFree(ownerId, now);

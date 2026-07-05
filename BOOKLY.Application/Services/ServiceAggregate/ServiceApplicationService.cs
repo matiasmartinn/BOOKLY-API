@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text;
-using System.Text.RegularExpressions;
 using AutoMapper;
 using BOOKLY.Application.Common;
 using BOOKLY.Application.Common.Models;
@@ -12,6 +9,7 @@ using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
+using BOOKLY.Domain.Aggregates.ServiceAggregate.Services;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.ValueObjects;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
@@ -531,76 +529,86 @@ namespace BOOKLY.Application.Services.ServiceAggregate
         }
         public async Task<Result> AddUnavailability(int id, CreateUnavailabilityDto dto, CancellationToken ct = default)
         {
-            var service = await _serviceRepository.GetOneWithUnavailability(id, ct);
-            if (service == null)
-                return Result.Failure(Error.NotFound("Servicio"));
-
             var now = _dateTimeProvider.NowArgentina();
             var hasOnlyOneTime = dto.StartTime.HasValue != dto.EndTime.HasValue;
             if (hasOnlyOneTime)
                 return Result.Failure(Error.Validation("Debe indicar hora de inicio y fin, o ninguna."));
 
-            DateRange dateRange;
-            ServiceUnavailability createdUnavailability;
-
-            try
-            {
-                var today = DateOnly.FromDateTime(now);
-                dateRange = DateRange.Create(dto.StartDate, dto.EndDate, today);
-
-                var timeRange = dto.StartTime.HasValue && dto.EndTime.HasValue
-                    ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
-                    : null;
-
-                createdUnavailability = service.AddUnavailability(dateRange, timeRange, dto.Reason);
-            }
-            catch (DomainException ex)
-            {
-                return Result.Failure(Error.Validation(ex.Message));
-            }
-
+            Service? service = null;
             var cancelledAppointments = new List<Appointment>();
 
-            var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRangeForUpdate(
-                service.Id,
-                dateRange.Start,
-                dateRange.End,
-                now,
-                ct);
-
-            var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
-            var actorUserId = NormalizeActorUserId(dto.UserId);
-
-            foreach (var appointment in candidateAppointments)
+            var result = await _unitOfWork.ExecuteInTransaction(async () =>
             {
-                if (!IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
-                    continue;
+                // El lock sobre la fila del servicio evita que una reserva concurrente entre al rango que se está bloqueando.
+                service = await _serviceRepository.GetOneWithSchedulesAndUnavailabilityForUpdate(id, ct);
+                if (service == null)
+                    return Result.Failure(Error.NotFound("Servicio"));
+
+                DateRange dateRange;
+                ServiceUnavailability createdUnavailability;
 
                 try
                 {
-                    appointment.MarkAsCancel(cancellationReason, now, actorUserId);
+                    var today = DateOnly.FromDateTime(now);
+                    dateRange = DateRange.Create(dto.StartDate, dto.EndDate, today);
+
+                    var timeRange = dto.StartTime.HasValue && dto.EndTime.HasValue
+                        ? TimeRange.Create(dto.StartTime.Value, dto.EndTime.Value)
+                        : null;
+
+                    createdUnavailability = service.AddUnavailability(dateRange, timeRange, dto.Reason);
                 }
                 catch (DomainException ex)
                 {
                     return Result.Failure(Error.Validation(ex.Message));
                 }
 
-                cancelledAppointments.Add(appointment);
-            }
+                var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRange(
+                    service.Id,
+                    dateRange.Start,
+                    dateRange.End,
+                    now,
+                    ct);
 
-            _serviceRepository.Update(service);
-            await _unitOfWork.SaveChanges(ct);
+                var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
+                var actorUserId = ActorUserId.Normalize(dto.UserId);
+
+                foreach (var appointment in candidateAppointments)
+                {
+                    if (!UnavailabilityAppointmentsAffected.IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
+                        continue;
+
+                    try
+                    {
+                        appointment.MarkAsCancel(cancellationReason, now, actorUserId);
+                    }
+                    catch (DomainException ex)
+                    {
+                        return Result.Failure(Error.Validation(ex.Message));
+                    }
+
+                    cancelledAppointments.Add(appointment);
+                }
+
+                _serviceRepository.Update(service);
+                await _unitOfWork.SaveChanges(ct);
+
+                return Result.Success();
+            }, ct);
+
+            if (result.IsFailure)
+                return result;
 
             foreach (var appointment in cancelledAppointments)
             {
                 await _appointmentCancellationNotificationService.NotifyAppointmentCancelled(
-                    service,
+                    service!,
                     appointment,
                     notifyOwner: false,
                     ct);
             }
 
-            return Result.Success();
+            return result;
         }
 
         public async Task<Result> RemoveUnavailability(int id, int unavailabilityId, CancellationToken ct = default)
@@ -741,19 +749,6 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 currentUserRole,
                 SecretaryPermission.ManageSchedules);
         }
-
-        private static bool IsAppointmentAffectedByUnavailability(
-            Appointment appointment,
-            ServiceUnavailability unavailability)
-        {
-            var appointmentDate = DateOnly.FromDateTime(appointment.StartDateTime);
-            var appointmentRange = TimeRange.Create(
-                TimeOnly.FromDateTime(appointment.StartDateTime),
-                TimeOnly.FromDateTime(appointment.EndDateTime));
-
-            return unavailability.BlocksRange(appointmentDate, appointmentRange);
-        }
-
         private static string BuildUnavailabilityCancellationReason(string? unavailabilityReason)
         {
             var normalizedReason = string.IsNullOrWhiteSpace(unavailabilityReason)
@@ -765,12 +760,9 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                 : $"Cancelado por excepción de agenda: {normalizedReason}";
         }
 
-        private static int? NormalizeActorUserId(int? userId)
-            => userId.HasValue && userId.Value > 0 ? userId.Value : null;
-
         private async Task<string> GenerateUniqueSlugAsync(string source, int? excludedServiceId, CancellationToken ct)
         {
-            var baseSlug = Slugify(source);
+            var baseSlug = Service.Slugify(source);
             var candidate = baseSlug;
             var suffix = 1;
 
@@ -897,30 +889,6 @@ namespace BOOKLY.Application.Services.ServiceAggregate
             }
 
             return Result.Failure(Error.Conflict("No se pudo persistir un codigo publico unico para el servicio."));
-        }
-
-        private static string Slugify(string value)
-        {
-            var normalized = value.Normalize(NormalizationForm.FormD);
-            var builder = new StringBuilder(normalized.Length);
-
-            foreach (var ch in normalized)
-            {
-                if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
-                    continue;
-
-                builder.Append(char.ToLowerInvariant(ch));
-            }
-
-            var slug = builder.ToString().Normalize(NormalizationForm.FormC);
-            slug = Regex.Replace(slug, @"[^a-z0-9\s-]", string.Empty);
-            slug = Regex.Replace(slug, @"\s+", "-");
-            slug = Regex.Replace(slug, @"-+", "-").Trim('-');
-
-            if (string.IsNullOrWhiteSpace(slug))
-                slug = "service";
-
-            return slug;
         }
     }
 }

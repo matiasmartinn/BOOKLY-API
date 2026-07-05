@@ -147,7 +147,7 @@ public sealed class SubscriptionServiceTests
             return Task.FromResult(Subscription);
         }
 
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default)
+        public Task<Subscription?> GetByOwnerIdTracked(int ownerId, CancellationToken ct = default)
         {
             return Task.FromResult(Subscription);
         }
@@ -183,6 +183,7 @@ public sealed class SubscriptionServiceTests
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceSchedule>());
@@ -208,6 +209,9 @@ public sealed class SubscriptionServiceTests
         {
             return Task.FromResult(1);
         }
+
+        public Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+            => operation();
     }
 
     private sealed class StubDateTimeProvider : IDateTimeProvider

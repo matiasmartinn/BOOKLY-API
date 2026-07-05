@@ -59,6 +59,21 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
             };
         }
 
+        public static Subscription Create(int ownerId, SubscriptionPlan plan, DateTime now)
+        {
+            if (plan is null)
+                throw new DomainException("El plan es requerido.");
+
+            var startDate = DateOnly.FromDateTime(now);
+
+            if (plan.Name == PlanName.Free)
+                return CreateFree(ownerId, now);
+
+            var period = SubscriptionPeriod.CreateMonthly(startDate);
+
+            return CreatePaid(ownerId, plan, period, now);
+        }
+
         public bool IsExpired(DateOnly today)
         {
             if (Period.IsOpenEnded)
@@ -81,7 +96,7 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
         }
 
         /// <summary>
-        /// Cancelled = "No renovar". En este modelo no hay auto-renovación,
+        /// Cancelled = "No renovar".
         /// pero sí existe el acto de cancelar para marcar que no se extenderá.
         /// - Sigue activa hasta EndDate.
         /// - Free no se cancela.
@@ -97,11 +112,6 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
             Status = SubscriptionStatus.Cancelled;
             UpdatedOn = now;
         }
-
-        /// <summary>
-        /// Renovación MANUAL (simulada): el Owner paga/renueva por fuera,
-        /// y el sistema actualiza el periodo. También reactiva la suscripción.
-        /// </summary>
         public void Renew(SubscriptionPeriod newPeriod, DateTime now)
         {
             if (Plan.Name == PlanName.Free)
@@ -139,10 +149,6 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
             UpdatedOn = now;
         }
 
-        /// <summary>
-        /// Downgrade requiere validar que NO exceda límites del nuevo plan.
-        /// Los conteos llegan desde la capa de aplicación (query).
-        /// </summary>
         public void DowngradeTo(SubscriptionPlan newPlan, int currentServices, int currentSecretaries, DateTime now)
         {
             if (newPlan is null)
@@ -205,6 +211,59 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
             Status = SubscriptionStatus.Active;
             UpdatedOn = now;
         }
+
+        public void ChangePlan(
+            SubscriptionPlan newPlan,
+            SubscriptionUsage usage,
+            DateTime now)
+        {
+            if (newPlan is null)
+                throw new DomainException("El nuevo plan es requerido.");
+
+            usage ??= SubscriptionUsage.Empty;
+
+            if (newPlan.Name == Plan.Name)
+                return;
+
+            var startDate = DateOnly.FromDateTime(now);
+
+            if (newPlan.Name == PlanName.Free)
+            {
+                ChangeToFree(
+                    startDate,
+                    usage.CurrentServices,
+                    usage.CurrentSecretaries,
+                    now);
+
+                return;
+            }
+
+            if (Plan.Name == PlanName.Free)
+            {
+                SwitchFromFreeToPaid(
+                    newPlan,
+                    SubscriptionPeriod.CreateMonthly(startDate),
+                    now);
+
+                return;
+            }
+
+            if (IsDowngrade(newPlan, Plan))
+            {
+                DowngradeTo(
+                    newPlan,
+                    usage.CurrentServices,
+                    usage.CurrentSecretaries,
+                    now);
+            }
+            else
+            {
+                UpgradeTo(newPlan, now);
+            }
+
+            Renew(SubscriptionPeriod.CreateMonthly(startDate), now);
+        }
+
         public void EnsureCanCreateService(int currentServices)
         {
             if (!Plan.AllowsServices(currentServices + 1))
@@ -218,5 +277,28 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
         }
 
         public bool CanUseExtraFields() => Plan.AllowsExtraFields();
+
+        private static bool IsDowngrade(SubscriptionPlan newPlan, SubscriptionPlan currentPlan)
+        {
+            return GetPlanRank(newPlan.Name) < GetPlanRank(currentPlan.Name);
+        }
+
+        private static int GetPlanRank(PlanName planName)
+        {
+            return planName switch
+            {
+                PlanName.Free => 1,
+                PlanName.Pro => 2,
+                PlanName.Max => 3,
+                _ => throw new DomainException("Plan inválido.")
+            };
+        }
+    }
+
+    public sealed record SubscriptionUsage(
+        int CurrentServices,
+        int CurrentSecretaries)
+    {
+        public static SubscriptionUsage Empty => new(0, 0);
     }
 }

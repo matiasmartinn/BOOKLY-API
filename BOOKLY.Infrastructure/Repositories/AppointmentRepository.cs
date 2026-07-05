@@ -225,7 +225,7 @@ namespace BOOKLY.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
-        public async Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(
+        public async Task<List<Appointment>> GetPendingFutureByServiceAndDateRange(
             int serviceId,
             DateOnly from,
             DateOnly to,

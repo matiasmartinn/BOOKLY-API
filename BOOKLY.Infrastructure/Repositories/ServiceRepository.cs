@@ -79,6 +79,19 @@ namespace BOOKLY.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id, ct);
         }
 
+        public async Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default)
+        {
+            // FOR UPDATE existe solo en PostgreSQL; SQLite (tests) serializa escritores por sí mismo.
+            if (dbContext.Database.IsNpgsql())
+                await dbContext.Database.ExecuteSqlAsync($"SELECT service_id FROM services WHERE service_id = {id} FOR UPDATE", ct);
+
+            return await dbContext.Services
+                .AsSplitQuery()
+                .Include(s => s.ServiceSchedules)
+                .Include(s => s.ServicesUnavailability)
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
+        }
+
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default)
         {
             var normalizedSlug = NormalizeSlug(slug);

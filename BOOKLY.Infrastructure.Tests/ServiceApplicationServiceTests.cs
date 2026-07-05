@@ -393,6 +393,7 @@ public sealed class ServiceApplicationServiceTests
         public Task<Service?> GetOneWithUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSecretaries(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetOneWithSchedulesAndUnavailability(int id, CancellationToken ct = default) => Task.FromResult<Service?>(null);
+        public Task<Service?> GetOneWithSchedulesAndUnavailabilityForUpdate(int id, CancellationToken ct = default) => Task.FromResult<Service?>(StoredService);
         public Task<Service?> GetBySlugWithSchedulesAndUnavailability(string slug, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<Service?> GetBySlugAndPublicBookingCodeWithSchedulesAndUnavailability(string slug, string publicBookingCode, CancellationToken ct = default) => Task.FromResult<Service?>(null);
         public Task<List<ServiceSchedule>> GetSchedulesByService(int serviceId, CancellationToken ct = default) => Task.FromResult(new List<ServiceSchedule>());
@@ -470,7 +471,7 @@ public sealed class ServiceApplicationServiceTests
     private sealed class FakeSubscriptionRepository(Subscription? subscription) : ISubscriptionRepository
     {
         public Task<Subscription?> GetByOwnerId(int ownerId, CancellationToken ct = default) => Task.FromResult(subscription);
-        public Task<Subscription?> GetByOwnerIdForUpdate(int ownerId, CancellationToken ct = default) => Task.FromResult(subscription);
+        public Task<Subscription?> GetByOwnerIdTracked(int ownerId, CancellationToken ct = default) => Task.FromResult(subscription);
         public Task AddOne(Subscription subscription, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(Subscription subscription) => throw new NotImplementedException();
     }
@@ -479,7 +480,7 @@ public sealed class ServiceApplicationServiceTests
     {
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDate(int serviceId, DateOnly date, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
         public Task<IReadOnlyCollection<Appointment>> GetByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
-        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRangeForUpdate(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default) => Task.FromResult(new List<Appointment>());
+        public Task<List<Appointment>> GetPendingFutureByServiceAndDateRange(int serviceId, DateOnly from, DateOnly to, DateTime now, CancellationToken ct = default) => Task.FromResult(new List<Appointment>());
         public Task<List<Appointment>> GetExpiredPendingByServices(IReadOnlyCollection<int> serviceIds, DateTime startOfToday, CancellationToken ct = default) => Task.FromResult(new List<Appointment>());
         public Task<IReadOnlyCollection<Appointment>> GetByService(int serviceId, CancellationToken ct = default) => Task.FromResult<IReadOnlyCollection<Appointment>>([]);
         public Task<bool> ExistsByServiceId(int serviceId, CancellationToken ct = default) => Task.FromResult(hasAppointmentsForService);
@@ -511,6 +512,9 @@ public sealed class ServiceApplicationServiceTests
     private sealed class FakeUnitOfWork : IUnitOfWork
     {
         public Task<int> SaveChanges(CancellationToken cancellationToken = default) => Task.FromResult(1);
+
+        public Task<T> ExecuteInTransaction<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+            => operation();
     }
 
     private sealed class StubDateTimeProvider : IDateTimeProvider
