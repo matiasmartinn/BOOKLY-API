@@ -96,6 +96,58 @@ public sealed class SubscriptionAggregateTests
     }
 
     [Fact]
+    public void Create_ShouldUseAutomaticMonthlyPeriod_ForPaidPlan()
+    {
+        var subscription = Subscription.Create(1, SubscriptionPlan.Pro(), ReferenceNow);
+
+        Assert.Equal(PlanName.Pro, subscription.Plan.Name);
+        Assert.Equal(DateOnly.FromDateTime(ReferenceNow), subscription.Period.StartDate);
+        Assert.Equal(DateOnly.FromDateTime(ReferenceNow).AddMonths(1).AddDays(-1), subscription.Period.EndDate);
+        Assert.Equal(SubscriptionStatus.Active, subscription.Status);
+    }
+
+    [Fact]
+    public void ChangePlan_ShouldRenewAndReactivatePaidUpgrade()
+    {
+        var subscription = Subscription.CreatePaid(
+            1,
+            SubscriptionPlan.Pro(),
+            SubscriptionPeriod.Create(new DateOnly(2026, 2, 1), new DateOnly(2026, 2, 28)),
+            ReferenceNow.AddMonths(-1));
+        subscription.Cancel(ReferenceNow.AddDays(-1));
+
+        subscription.ChangePlan(SubscriptionPlan.Max(), SubscriptionUsage.Empty, ReferenceNow);
+
+        Assert.Equal(PlanName.Max, subscription.Plan.Name);
+        Assert.Equal(SubscriptionStatus.Active, subscription.Status);
+        Assert.Equal(DateOnly.FromDateTime(ReferenceNow), subscription.Period.StartDate);
+        Assert.Equal(DateOnly.FromDateTime(ReferenceNow).AddMonths(1).AddDays(-1), subscription.Period.EndDate);
+    }
+
+    [Fact]
+    public void ChangePlan_ShouldRejectDowngrade_WhenUsageExceedsNewPlan()
+    {
+        var originalPeriod = SubscriptionPeriod.Create(
+            DateOnly.FromDateTime(ReferenceNow),
+            DateOnly.FromDateTime(ReferenceNow).AddMonths(1).AddDays(-1));
+        var subscription = Subscription.CreatePaid(
+            1,
+            SubscriptionPlan.Max(),
+            originalPeriod,
+            ReferenceNow);
+
+        var action = () => subscription.ChangePlan(
+            SubscriptionPlan.Pro(),
+            new SubscriptionUsage(CurrentServices: 4, CurrentSecretaries: 0),
+            ReferenceNow.AddDays(1));
+
+        var exception = Assert.Throws<DomainException>(action);
+        Assert.Equal("No se puede bajar de plan: excede el límite de servicios.", exception.Message);
+        Assert.Equal(PlanName.Max, subscription.Plan.Name);
+        Assert.Equal(originalPeriod, subscription.Period);
+    }
+
+    [Fact]
     public void CreateMonthly_ShouldCreateInclusiveMonth_WhenStartIsFirstDay()
     {
         var period = SubscriptionPeriod.CreateMonthly(new DateOnly(2026, 3, 1));
