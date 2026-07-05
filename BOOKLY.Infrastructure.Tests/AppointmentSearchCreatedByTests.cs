@@ -1,8 +1,9 @@
 using AutoMapper;
+using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
-using BOOKLY.Application.Services;
 using BOOKLY.Application.Services.AppointmentAggregate;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
+using BOOKLY.Application.Services.SlotValidationService;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
@@ -12,7 +13,6 @@ using BOOKLY.Domain.Aggregates.ServiceTypeAggregate;
 using BOOKLY.Domain.Aggregates.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate;
 using BOOKLY.Domain.Aggregates.UserAggregate.ValueObjects;
-using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Interfaces;
 using BOOKLY.Domain.Queries;
@@ -98,7 +98,7 @@ public sealed class AppointmentSearchCreatedByTests
             new FakeServiceTypeRepository(),
             new FakeUserRepository(),
             historyRepository,
-            new AvailabilityService(),
+            new FakeSlotValidationService(),
             new FakeEmailService(),
             new FakeAppointmentCancellationNotificationService(),
             new EffectiveSubscriptionResolver(new FakeSubscriptionRepository(), new StubDateTimeProvider()),
@@ -351,6 +351,14 @@ public sealed class AppointmentSearchCreatedByTests
 
         public void Update(Subscription subscription)
             => throw new NotImplementedException();
+    }
+
+    private sealed class FakeSlotValidationService : ISlotValidationService
+    {
+        public Task<Result> ValidateSlotAvailability(Service service, DateTime requestedStart, int? excludedAppointmentId, bool requireActiveService, CancellationToken ct = default)
+        {
+            return Task.FromResult(Result.Success());
+        }
     }
 
     private sealed class FakeEmailService : IEmailService

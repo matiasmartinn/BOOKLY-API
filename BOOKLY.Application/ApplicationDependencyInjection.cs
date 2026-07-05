@@ -9,6 +9,7 @@ using BOOKLY.Application.Services.MetricsAggregate;
 using BOOKLY.Application.Services.PublicBooking;
 using BOOKLY.Application.Services.ServiceAggregate;
 using BOOKLY.Application.Services.ServiceTypeAggregate;
+using BOOKLY.Application.Services.SlotValidationService;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Application.Services.UserAggregate;
 using BOOKLY.Application.Services.UserAggregate.SecretaryManagement;
@@ -43,6 +44,7 @@ namespace BOOKLY.Application.DependencyInjection
             services.AddScoped<IServiceAuthorizationService, ServiceAuthorizationService>();
             services.AddScoped<IEffectiveSubscriptionResolver, EffectiveSubscriptionResolver>();
             services.AddScoped<IAppointmentValidator, AppointmentValidator>();
+            services.AddScoped<ISlotValidationService, SlotValidationService>();
             services.AddScoped<IDomainEventHandler<AppointmentCreatedEvent>, RecordAppointmentCreatedHandler>();
             services.AddScoped<IDomainEventHandler<AppointmentStatusChangedEvent>, RecordStatusChangedHandler>();
 

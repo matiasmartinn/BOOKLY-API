@@ -217,10 +217,6 @@ namespace BOOKLY.Domain.Aggregates.SubscriptionAggregate
                 throw new DomainException("El plan actual no permite agregar más secretarios.");
         }
 
-        public void EnsureCanUseExtraFields()
-        {
-            if (!Plan.AllowsExtraFields())
-                throw new DomainException("El plan actual no permite utilizar campos extra.");
-        }
+        public bool CanUseExtraFields() => Plan.AllowsExtraFields();
     }
 }

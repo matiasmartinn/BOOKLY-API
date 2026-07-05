@@ -3,13 +3,13 @@ using BOOKLY.Application.Common.Models;
 using BOOKLY.Application.Interfaces;
 using BOOKLY.Application.Mappings;
 using BOOKLY.Application.Services.AppointmentAggregate.DTOs;
+using BOOKLY.Application.Services.SlotValidationService;
 using BOOKLY.Application.Services.SubscriptionAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate;
 using BOOKLY.Domain.Aggregates.AppointmentAggregate.Entities;
 using BOOKLY.Domain.Aggregates.ServiceAggregate;
 using BOOKLY.Domain.Aggregates.ServiceAggregate.Enums;
 using BOOKLY.Domain.Aggregates.UserAggregate.Enums;
-using BOOKLY.Domain.DomainServices;
 using BOOKLY.Domain.Emailing;
 using BOOKLY.Domain.Exceptions;
 using BOOKLY.Domain.Interfaces;
@@ -25,7 +25,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
         private readonly IServiceTypeRepository _serviceTypeRepository;
         private readonly IUserRepository _userRepository;
         private readonly IAppointmentHistoryRepository _historyRepository;
-        private readonly IAvailabilityService _availabilityService;
+        private readonly ISlotValidationService _slotValidationService;
         private readonly IEmailService _emailService;
         private readonly IAppointmentCancellationNotificationService _appointmentCancellationNotificationService;
         private readonly IEffectiveSubscriptionResolver _effectiveSubscriptionResolver;
@@ -41,7 +41,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             IServiceTypeRepository serviceTypeRepository,
             IUserRepository userRepository,
             IAppointmentHistoryRepository historyRepository,
-            IAvailabilityService availabilityService,
+            ISlotValidationService slotValidationService,
             IEmailService emailService,
             IAppointmentCancellationNotificationService appointmentCancellationNotificationService,
             IEffectiveSubscriptionResolver effectiveSubscriptionResolver,
@@ -56,7 +56,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             _serviceTypeRepository = serviceTypeRepository;
             _userRepository = userRepository;
             _historyRepository = historyRepository;
-            _availabilityService = availabilityService;
+            _slotValidationService = slotValidationService;
             _emailService = emailService;
             _appointmentCancellationNotificationService = appointmentCancellationNotificationService;
             _effectiveSubscriptionResolver = effectiveSubscriptionResolver;
@@ -206,11 +206,12 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (serviceType == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("TipoServicio"));
 
-            var extraFieldsValidation = await ValidateExtraFieldsAllowed(service.OwnerId, ct);
-            var canUseExtraFields = extraFieldsValidation.IsSuccess;
+            var subscription = await _effectiveSubscriptionResolver.Resolve(service.OwnerId, ct);
+
+            var canUseExtraFields = subscription.CanUseExtraFields();
 
             if (!canUseExtraFields && dto.FieldValues.Count > 0)
-                return Result<AppointmentDto>.Failure(extraFieldsValidation.Error!);
+                return Result<AppointmentDto>.Failure(Error.Validation("El plan actual no permite utilizar campos extra."));
 
             if (canUseExtraFields)
             {
@@ -219,7 +220,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     return Result<AppointmentDto>.Failure(fieldValidation.Error!);
             }
 
-            var slotValidation = await ValidateSlotAvailability(
+            var slotValidation = await _slotValidationService.ValidateSlotAvailability(
                 service,
                 requestedStart,
                 null,
@@ -294,7 +295,7 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             if (service == null)
                 return Result<AppointmentDto>.Failure(Error.NotFound("Servicio"));
 
-            var slotValidation = await ValidateSlotAvailability(
+            var slotValidation = await _slotValidationService.ValidateSlotAvailability(
                 service,
                 dto.StartDateTime,
                 appointment.Id,
@@ -435,36 +436,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
             return Result.Success();
         }
 
-        private async Task<Result> ValidateSlotAvailability(
-            Service service,
-            DateTime requestedStart,
-            int? excludedAppointmentId,
-            bool requireActiveService,
-            CancellationToken ct)
-        {
-            var now = _dateTimeProvider.NowArgentina();
-            if (requireActiveService && !service.IsActive)
-                return Result.Failure(Error.Conflict("El servicio no se encuentra activo."));
-
-            if (requestedStart <= now)
-                return Result.Failure(Error.Validation("El turno debe agendarse en un horario futuro."));
-
-            if (service.GetScheduleFor(requestedStart, service.DurationMinutes) is null)
-                return Result.Failure(Error.Validation("El horario no pertenece a la agenda del servicio."));
-
-            var date = DateOnly.FromDateTime(requestedStart);
-            var appointments = await _repository.GetByServiceAndDate(service.Id, date, ct);
-            var appointmentsToEvaluate = excludedAppointmentId.HasValue
-                ? appointments.Where(a => a.Id != excludedAppointmentId.Value).ToList()
-                : appointments;
-
-            var availableSlots = _availabilityService.GetAvailableSlots(service, appointmentsToEvaluate, date, now);
-
-            if (!availableSlots.Contains(requestedStart))
-                return Result.Failure(Error.Conflict("El horario seleccionado ya no está disponible."));
-
-            return Result.Success();
-        }
         private async Task NotifyAppointmentCreated(Service service, Appointment appointment, CancellationToken ct)
         {
             var owner = await _userRepository.GetOne(service.OwnerId, ct);
@@ -641,21 +612,6 @@ namespace BOOKLY.Application.Services.AppointmentAggregate
                     "El turno se guardó correctamente, pero ocurrió un error inesperado enviando el email de {Purpose} a {RecipientEmail}.",
                     purpose,
                     recipientEmail);
-            }
-        }
-
-        private async Task<Result> ValidateExtraFieldsAllowed(int ownerId, CancellationToken ct)
-        {
-            var subscription = await _effectiveSubscriptionResolver.Resolve(ownerId, ct);
-
-            try
-            {
-                subscription.EnsureCanUseExtraFields();
-                return Result.Success();
-            }
-            catch (DomainException ex)
-            {
-                return Result.Failure(Error.Validation(ex.Message));
             }
         }
     }

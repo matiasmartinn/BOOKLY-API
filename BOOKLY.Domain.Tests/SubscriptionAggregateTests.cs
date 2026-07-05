@@ -30,18 +30,15 @@ public sealed class SubscriptionAggregateTests
     }
 
     [Fact]
-    public void EnsureCanUseExtraFields_ShouldThrow_WhenPlanDoesNotAllowThem()
+    public void CanUseExtraFields_ShouldReturnFalse_WhenPlanDoesNotAllowThem()
     {
         var subscription = Subscription.CreateFree(1, ReferenceNow);
 
-        var action = () => subscription.EnsureCanUseExtraFields();
-
-        var exception = Assert.Throws<DomainException>(action);
-        Assert.Equal("El plan actual no permite utilizar campos extra.", exception.Message);
+        Assert.False(subscription.CanUseExtraFields());
     }
 
     [Fact]
-    public void EnsureCanUseExtraFields_ShouldNotThrow_WhenPlanAllowsThem()
+    public void CanUseExtraFields_ShouldReturnTrue_WhenPlanAllowsThem()
     {
         var subscription = Subscription.CreatePaid(
             1,
@@ -51,7 +48,7 @@ public sealed class SubscriptionAggregateTests
                 DateOnly.FromDateTime(ReferenceNow.AddMonths(1))),
             ReferenceNow);
 
-        subscription.EnsureCanUseExtraFields();
+        Assert.True(subscription.CanUseExtraFields());
     }
 
     [Fact]
