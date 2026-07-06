@@ -24,7 +24,7 @@ namespace BOOKLY.Infrastructure.Repositories
         {
             var totalUser = await _dbContext.Users
                 .AsNoTracking()
-                .CountAsync();
+                .CountAsync(ct);
 
             var ownerCount = await _dbContext.Users
                 .AsNoTracking()
@@ -59,14 +59,9 @@ namespace BOOKLY.Infrastructure.Repositories
                 .AsNoTracking()
                 .CountAsync(service => service.IsActive, ct);
 
-            var subscriptionsCount = await BuildCurrentSubscriptionQuery(today)
-                .GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    Active = g.Count(),
-                    Paid = g.Count(s => s.PlanName != PlanName.Free)
-                })
-                .FirstOrDefaultAsync();
+            var currentPlanNames = await BuildCurrentSubscriptionQuery(today)
+                .Select(subscription => subscription.PlanName)
+                .ToListAsync(ct);
 
             return new AdminDashboardSummaryReadModel(
                 TotalUsers: totalUser,
@@ -78,8 +73,8 @@ namespace BOOKLY.Infrastructure.Repositories
                 PendingInvitationOwners: pendingInvitationAdmins,
                 ActiveServices: activeServices,
                 DisabledServices: totalServices - activeServices,
-                ActiveSubscriptions: subscriptionsCount?.Active ?? 0,
-                PaidSubscriptions: subscriptionsCount?.Paid ?? 0,
+                ActiveSubscriptions: currentPlanNames.Count,
+                PaidSubscriptions: currentPlanNames.Count(planName => planName != PlanName.Free),
                 RecentActiveOwners: recentActiveOwners);
         }
 
