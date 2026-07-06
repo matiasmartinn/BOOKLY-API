@@ -563,31 +563,34 @@ namespace BOOKLY.Application.Services.ServiceAggregate
                     return Result.Failure(Error.Validation(ex.Message));
                 }
 
-                var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRange(
-                    service.Id,
-                    dateRange.Start,
-                    dateRange.End,
-                    now,
-                    ct);
-
-                var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
-                var actorUserId = ActorUserId.Normalize(dto.UserId);
-
-                foreach (var appointment in candidateAppointments)
+                if (dto.CancelAffectedAppointments == true)
                 {
-                    if (!UnavailabilityAppointmentsAffected.IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
-                        continue;
+                    var candidateAppointments = await _appointmentRepository.GetPendingFutureByServiceAndDateRange(
+                        service.Id,
+                        dateRange.Start,
+                        dateRange.End,
+                        now,
+                        ct);
 
-                    try
-                    {
-                        appointment.MarkAsCancel(cancellationReason, now, actorUserId);
-                    }
-                    catch (DomainException ex)
-                    {
-                        return Result.Failure(Error.Validation(ex.Message));
-                    }
+                    var cancellationReason = BuildUnavailabilityCancellationReason(dto.Reason);
+                    var actorUserId = ActorUserId.Normalize(dto.UserId);
 
-                    cancelledAppointments.Add(appointment);
+                    foreach (var appointment in candidateAppointments)
+                    {
+                        if (!UnavailabilityAppointmentsAffected.IsAppointmentAffectedByUnavailability(appointment, createdUnavailability))
+                            continue;
+
+                        try
+                        {
+                            appointment.MarkAsCancel(cancellationReason, now, actorUserId);
+                        }
+                        catch (DomainException ex)
+                        {
+                            return Result.Failure(Error.Validation(ex.Message));
+                        }
+
+                        cancelledAppointments.Add(appointment);
+                    }
                 }
 
                 _serviceRepository.Update(service);

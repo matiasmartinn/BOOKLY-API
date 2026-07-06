@@ -98,7 +98,7 @@ public sealed class ServiceUnavailabilityCancellationTests
     }
 
     [Fact]
-    public async Task AddUnavailability_ShouldCancelAffectedPendingFutureAppointments_WhenCancellationFlagIsDisabled()
+    public async Task AddUnavailability_ShouldPreserveAffectedPendingFutureAppointments_WhenCancellationFlagIsDisabled()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -125,10 +125,10 @@ public sealed class ServiceUnavailabilityCancellationTests
 
         Assert.True(result.IsSuccess);
 
-        var cancelled = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
-        Assert.Equal(AppointmentStatus.Cancelled, cancelled.Status);
-        Assert.Equal("Cancelado por excepción de agenda: Capacitacion interna", cancelled.CancelReason);
-        Assert.Single(notifier.Calls);
+        var affected = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
+        Assert.Equal(AppointmentStatus.Pending, affected.Status);
+        Assert.Null(affected.CancelReason);
+        Assert.Empty(notifier.Calls);
 
         var savedService = await context.Services
             .Include(service => service.ServicesUnavailability)
@@ -137,14 +137,14 @@ public sealed class ServiceUnavailabilityCancellationTests
         Assert.Single(savedService.ServicesUnavailability);
         var cancellationHistory = await context.AppointmentStatusHistories
             .AsNoTracking()
-            .SingleAsync(h => h.AppointmentId == seed.CancelledAppointmentId);
+            .Where(h => h.AppointmentId == seed.CancelledAppointmentId)
+            .ToListAsync();
 
-        Assert.Equal(AppointmentStatus.Pending, cancellationHistory.OldStatus);
-        Assert.Equal(AppointmentStatus.Cancelled, cancellationHistory.NewStatus);
+        Assert.Empty(cancellationHistory);
     }
 
     [Fact]
-    public async Task AddUnavailability_ShouldCancelAffectedPendingFutureAppointments_WhenFlagIsOmitted()
+    public async Task AddUnavailability_ShouldPreserveAffectedPendingFutureAppointments_WhenFlagIsOmitted()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -171,19 +171,20 @@ public sealed class ServiceUnavailabilityCancellationTests
 
         Assert.True(result.IsSuccess);
 
-        var cancelled = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
+        var affected = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.CancelledAppointmentId);
         var untouchedFuturePending = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == seed.UnaffectedFuturePendingAppointmentId);
 
-        Assert.Equal(AppointmentStatus.Cancelled, cancelled.Status);
-        Assert.Equal("Cancelado por excepción de agenda: Vacaciones", cancelled.CancelReason);
+        Assert.Equal(AppointmentStatus.Pending, affected.Status);
+        Assert.Null(affected.CancelReason);
         Assert.Equal(AppointmentStatus.Pending, untouchedFuturePending.Status);
 
         var cancellationHistory = await context.AppointmentStatusHistories
             .AsNoTracking()
-            .SingleAsync(h => h.AppointmentId == seed.CancelledAppointmentId);
+            .Where(h => h.AppointmentId == seed.CancelledAppointmentId)
+            .ToListAsync();
 
-        Assert.Equal(seed.Owner.Id, cancellationHistory.UserId);
-        Assert.Single(notifier.Calls);
+        Assert.Empty(cancellationHistory);
+        Assert.Empty(notifier.Calls);
     }
 
     private static ServiceApplicationService CreateSut(
