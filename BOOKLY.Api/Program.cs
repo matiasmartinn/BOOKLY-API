@@ -8,7 +8,6 @@ using BOOKLY.Domain.DomainServices;
 using BOOKLY.Infrastructure;
 using BOOKLY.Infrastructure.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,23 +70,43 @@ builder.Services.AddRateLimiter(options =>
         }, token);
     };
 
-    // 5 req/min · sin cola → corta fuerza bruta inmediatamente
-    options.AddFixedWindowLimiter("auth-policy", o =>
+    // 5 req/min por IP · sin cola → corta fuerza bruta inmediatamente
+    options.AddPolicy("auth-policy", ctx =>
     {
-        o.Window = TimeSpan.FromMinutes(1);
-        o.PermitLimit = 5;
-        o.QueueLimit = 0;
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"auth:{ip}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
     });
 
-    // 20 req/min · sliding · cola 2 → tolera bursts legítimos
-    options.AddSlidingWindowLimiter("booking-policy", o =>
+    // 20 req/min por usuario autenticado o IP anónima · tolera bursts legítimos
+    options.AddPolicy("booking-policy", ctx =>
     {
-        o.Window = TimeSpan.FromMinutes(1);
-        o.SegmentsPerWindow = 6;
-        o.PermitLimit = 20;
-        o.QueueLimit = 2;
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        var userId =
+            ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? ctx.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+
+        var key = !string.IsNullOrWhiteSpace(userId)
+            ? $"user:{userId}"
+            : $"ip:{ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: $"booking:{key}",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                PermitLimit = 20,
+                QueueLimit = 2,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
     });
 
 
@@ -125,7 +144,7 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-builder.Services.AddHealthChecks();       
+builder.Services.AddHealthChecks();
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -150,24 +169,24 @@ if (app.Environment.IsDevelopment() ||
     await app.Services.SeedBooklyDataAsync();
 }
 
-app.UseForwardedHeaders();  
-app.UseExceptionHandling();  
+app.UseForwardedHeaders();
+app.UseExceptionHandling();
 
 if (!app.Environment.IsDevelopment())
-    app.UseHsts();               
+    app.UseHsts();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();          
+    app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();        
-app.UseCors(FrontendPolicy);      
+app.UseHttpsRedirection();
+app.UseCors(FrontendPolicy);
 
-app.UseAuthentication();          
-app.UseRateLimiter();         
-app.UseAuthorization();           
+app.UseAuthentication();
+app.UseRateLimiter();
+app.UseAuthorization();
 
 app.MapHealthChecks("/health");
 app.MapControllers();
